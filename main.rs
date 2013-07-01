@@ -18,6 +18,12 @@ use syntax::ast_map;
 
 use std::os;
 
+use visit::*;
+use syntax::visit_new::Visitor;
+
+mod visit;
+mod doctree;
+
 fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
@@ -48,7 +54,6 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
 fn main() {
     let cratename = Path(os::args()[1]);
     let (crate, cmap, amap) = get_ast_and_resolve(&cratename);
-    println(fmt!("%?", crate));
-    println(fmt!("%?", cmap));
-    println(fmt!("%?", amap));
+    let v = RustdocVisitor::new();
+    v.visit_crate(crate);
 }
