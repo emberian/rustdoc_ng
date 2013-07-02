@@ -1,6 +1,9 @@
-This is a prototype of rustdoc.
+This is a prototype of rustdoc. As a temporary hack, build with `rustc
+rustdoc.rs` and copy the binary to wherever your rust prefix is (If it's
+`/usr/local`, `/usr/local/bin`. in my case it's `~/.local`, so it goes into
+`~/.local/bin`).
 
-Do not use!
+Do not use unless you plan on helping develop it!
 
 Copyright 2013 Corey Richardson
 
