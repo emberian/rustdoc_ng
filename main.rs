@@ -1,14 +1,24 @@
+#[link(name = "rustdoc_ng",
+       vers = "0.1.0",
+       uuid = "8c6e4598-1596-4aa5-a24c-b811914bbbc6")];
+#[desc = "rustdoc, the Rust documentation extractor"];
+#[license = "MIT/ASL2"];
+#[crate_type = "bin"];
+
+#[deny(warnings)];
+
 extern mod syntax;
 extern mod rustc;
 
+use rustc::{front, metadata, driver, middle};
+
 use syntax::parse;
 use syntax::ast;
+use syntax::ast_map;
 
 use std::os;
-use std::path;
 
-fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, rustc::middle::resolve::CrateMap) {
-    use rustc::{front, metadata, driver, middle};
+fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
@@ -32,12 +42,13 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, rustc::middle::resolve::Cr
                                    sess.opts.is_static, id_int);
     let lang_items = middle::lang_items::collect_language_items(crate, sess);
     let cmap = middle::resolve::resolve_crate(sess, lang_items, crate);
-    (crate, cmap)
+    (crate, cmap, ast_map)
 }
 
 fn main() {
     let cratename = Path(os::args()[1]);
-    let (crate, cmap) = get_ast_and_resolve(&cratename);
+    let (crate, cmap, amap) = get_ast_and_resolve(&cratename);
     println(fmt!("%?", crate));
     println(fmt!("%?", cmap));
+    println(fmt!("%?", amap));
 }

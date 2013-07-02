@@ -1,9 +1,10 @@
-This is a prototype of rustdoc. As a temporary hack, build with `rustc
-rustdoc.rs` and copy the binary to wherever your rust prefix is (If it's
-`/usr/local`, `/usr/local/bin`. in my case it's `~/.local`, so it goes into
-`~/.local/bin`).
+This is a prototype of rustdoc. It uses `rustpkg`, so clone the repo into a
+workspace (I use `~/.rustpkg`, so it goes into `~/.rustpkg/src`) and run
+`rustpkg build rustdoc_ng`. As a temporary hack, you need to move the
+executable (`rustdoc_ng`) into your Rust prefix (I use `../configure
+--prefix=~/.local`, so I put it in `~/.local/bin`).
 
-Do not use unless you plan on helping develop it!
+**Do not use unless you plan on helping develop it!**
 
 Copyright 2013 Corey Richardson
 
