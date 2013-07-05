@@ -3,9 +3,8 @@
 use syntax::ast;
 use syntax::ast::{ident, node_id};
 
-pub type Attribute = ast::attribute;
-
-pub enum StructureType {
+#[deriving(ToStr)]
+pub enum StructType {
     /// A normal struct
     Plain,
     /// A tuple struct
@@ -21,20 +20,20 @@ pub enum TypeBound {
     TraitBound(ast::trait_ref)
 }
 
-pub struct StructureField {
+pub struct StructField {
     id: node_id,
     type_: @ast::Ty,
-    attrs: ~[Attribute],
     /// Name is optional for tuple structs
     name: Option<ident>,
+    attrs: ~[ast::attribute],
     visibility: Option<ast::visibility>
 }
 
-pub struct Structure {
+pub struct Struct {
     node: node_id,
-    struct_type: StructureType,
+    struct_type: StructType,
     name: ident,
-    type_params: ~[ast::TyParam],
-    lifetimes: ~[ast::Lifetime],
-    fields: ~[StructureField]
+    generics: ast::Generics,
+    attrs: ~[ast::attribute],
+    fields: ~[StructField]
 }

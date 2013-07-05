@@ -5,10 +5,12 @@
 #[license = "MIT/ASL2"];
 #[crate_type = "bin"];
 
-#[deny(warnings)];
+//#[deny(warnings)];
 
 extern mod syntax;
 extern mod rustc;
+
+extern mod extra;
 
 use rustc::{front, metadata, driver, middle};
 
@@ -17,12 +19,17 @@ use syntax::ast;
 use syntax::ast_map;
 
 use std::os;
+use extra::json::ToJson;
 
 use visit::*;
 use syntax::visit_new::Visitor;
 
+use clean::Clean;
+
+pub mod doctree;
+pub mod clean;
+mod jsonify;
 mod visit;
-mod doctree;
 
 fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
     let parsesess = parse::new_parse_sess(None);
@@ -53,7 +60,20 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
 
 fn main() {
     let cratename = Path(os::args()[1]);
-    let (crate, cmap, amap) = get_ast_and_resolve(&cratename);
-    let v = RustdocVisitor::new();
+    let (crate, _cmap, amap) = get_ast_and_resolve(&cratename);
+    let mut v = RustdocVisitor::new();
     v.visit_crate(crate);
+    // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
+    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x| x.clean()).collect();
+    // fill in attributes from the ast map
+    for crate_structs.mut_iter().advance |x| {
+        x.attrs = match amap.get(&x.node) {
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            _ => fail!("struct node_id mapped to non-item")
+        }
+    }
+    // convert to json
+    for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
+        println(j.to_str());
+    }
 }

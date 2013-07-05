@@ -8,7 +8,7 @@ use syntax::ast;
 use doctree::*;
 
 pub struct RustdocVisitor {
-    structs: ~[Structure]
+    structs: ~[Struct]
 }
 
 impl RustdocVisitor {
@@ -23,7 +23,7 @@ impl Visitor for RustdocVisitor {
     pub fn visit_struct_def(&mut self, sd: @ast::struct_def, nm: ast::ident, generics:
                              &ast::Generics, id: ast::node_id) {
         let mut struct_type = Plain;
-        let mut fields: ~[StructureField] = vec::with_capacity(sd.fields.len());
+        let mut fields: ~[StructField] = vec::with_capacity(sd.fields.len());
         if sd.ctor_id.is_some() {
             // We are in a unit/tuple struct
             match sd.fields.len() {
@@ -34,7 +34,7 @@ impl Visitor for RustdocVisitor {
         }
 
         for sd.fields.iter().advance |&x| {
-            fields.push(StructureField {
+            fields.push(StructField {
                         id: x.node.id,
                         type_:  x.node.ty,
                         attrs:  copy x.node.attrs,
@@ -46,17 +46,14 @@ impl Visitor for RustdocVisitor {
                         });
         }
         self.structs.push(
-            Structure {
+            Struct {
                 node: id,
                 struct_type: struct_type,
                 name: nm,
-                type_params: generics.ty_params.iter().transform(|&x|
-                                                                 x).collect::<~[ast::TyParam]>(),
-                lifetimes: generics.lifetimes.iter().transform(|&x|
-                                                               x).collect::<~[ast::Lifetime]>(),
+                attrs: ~[],
+                generics: copy *generics,
                 fields: fields
             }
         );
-
     }
 }

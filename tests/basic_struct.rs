@@ -16,3 +16,7 @@ struct Baz {
     /// a field
     a: uint
 }
+
+struct Qux;
+
+struct Quux(int, uint, Baz);
