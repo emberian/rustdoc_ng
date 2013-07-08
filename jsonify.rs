@@ -1,5 +1,5 @@
 use std::hashmap::HashMap;
-use extra::json::{ToJson, Json, Object, List, Null, String, Number, Boolean};
+use extra::json::{ToJson, Json, Object, String};
 
 use syntax::ast;
 use clean;
@@ -38,6 +38,7 @@ impl ToJson for clean::StructField {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
         o.insert(~"name", String(self.name.clone()));
+        o.insert(~"type", String(self.type_.to_str()));
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"visibility", String(match self.visibility {
                     None => ~"",

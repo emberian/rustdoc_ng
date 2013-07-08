@@ -31,7 +31,8 @@ pub mod clean;
 mod jsonify;
 mod visit;
 
-fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
+fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map,
+                                         middle::typeck::method_map, middle::typeck::vtable_map) {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
@@ -39,7 +40,7 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
         ..copy *rustc::driver::session::basic_options()
     };
 
-    let sess = driver::driver::build_session(sessopts, syntax::diagnostic::emit);
+    let mut sess = driver::driver::build_session(sessopts, syntax::diagnostic::emit);
 
     let mut crate = parse::parse_crate_from_file(crate, ~[], parsesess);
     // XXX: these need to be kept in sync with the pass order in rustc::driver::compile_rest
@@ -55,12 +56,20 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
                                    sess.opts.is_static, id_int);
     let lang_items = middle::lang_items::collect_language_items(crate, sess);
     let cmap = middle::resolve::resolve_crate(sess, lang_items, crate);
-    (crate, cmap, ast_map)
+    middle::entry::find_entry_point(sess, crate, ast_map);
+    let freevars = middle::freevars::annotate_freevars(cmap.def_map, crate);
+    let region_map = middle::region::resolve_crate(sess, cmap.def_map, crate);
+    let rp_set = middle::region::determine_rp_in_crate(sess, ast_map, cmap.def_map, crate);
+    let ty_cx = middle::ty::mk_ctxt(sess, cmap.def_map, ast_map, freevars, region_map,
+                                    rp_set, lang_items);
+
+    let (mmap, vmap) = middle::typeck::check_crate(ty_cx, copy cmap.trait_map, crate);
+    (crate, cmap, ast_map, mmap, vmap)
 }
 
 fn main() {
     let cratename = Path(os::args()[1]);
-    let (crate, _cmap, amap) = get_ast_and_resolve(&cratename);
+    let (crate, cmap, amap, mmap, vmap) = get_ast_and_resolve(&cratename);
     let mut v = RustdocVisitor::new();
     v.visit_crate(crate);
     // clean data (de-@'s stuff, ignores uneeded data, stringifies things)

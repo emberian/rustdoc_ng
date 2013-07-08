@@ -1,7 +1,6 @@
 use its = syntax::parse::token::ident_to_str;
 
 use syntax::ast;
-use syntax::print::pprust::lit_to_str;
 
 use super::doctree;
 
@@ -58,7 +57,7 @@ impl Trait {
     }
 }
 
-pub struct Type(uint);
+pub struct Type(ast::node_id);
 
 pub struct StructField {
     name: ~str,
@@ -110,13 +109,27 @@ impl Clean<Attribute> for ast::attribute {
     }
 }
 
+fn lit_to_str(lit: &ast::lit) -> ~str {
+    match lit.node {
+        ast::lit_str(st) => st.to_owned(),
+        ast::lit_int(ch, ast::ty_char) => ~"'" + ch.to_str() + "'",
+        ast::lit_int(i, _t) => i.to_str(),
+        ast::lit_uint(u, _t) => u.to_str(),
+        ast::lit_int_unsuffixed(i) => i.to_str(),
+        ast::lit_float(f, _t) => f.to_str(),
+        ast::lit_float_unsuffixed(f) => f.to_str(),
+        ast::lit_bool(b) => b.to_str(),
+        ast::lit_nil => ~"",
+    }
+}
+
 impl Clean<Attribute> for ast::meta_item_ {
     pub fn clean(&self) -> Attribute {
         match *self {
             ast::meta_word(s) => Word(s.to_owned()),
             ast::meta_list(ref s, ref l) => List(s.to_owned(), l.iter()
                                          .transform(|x| x.node.clean()).collect()),
-            ast::meta_name_value(s, v) => NameValue(s.to_owned(), lit_to_str(@v))
+            ast::meta_name_value(s, ref v) => NameValue(s.to_owned(), lit_to_str(v))
         }
     }
 }
@@ -158,6 +171,6 @@ impl Clean<TyParam> for ast::TyParam {
 
 impl Clean<Type> for ast::Ty {
     pub fn clean(&self) -> Type {
-        Type(self.id as uint)
+        Type(self.id)
     }
 }

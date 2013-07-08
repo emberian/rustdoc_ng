@@ -12,6 +12,7 @@ struct Bar {
     b: int
 }
 
+#[doc="foo"]
 struct Baz {
     /// a field
     a: uint
@@ -20,3 +21,5 @@ struct Baz {
 struct Qux;
 
 struct Quux(int, uint, Baz);
+
+fn main() {}
