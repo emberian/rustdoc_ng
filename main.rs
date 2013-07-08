@@ -31,18 +31,29 @@ pub mod clean;
 mod jsonify;
 mod visit;
 
-fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
+fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> (@ast::crate,
+        middle::resolve::CrateMap, ast_map::map, middle::typeck::method_map,
+        middle::typeck::vtable_map, middle::ty::ctxt) {
+
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
         maybe_sysroot: Some(@std::os::self_exe_path().get().pop()),
+        addl_lib_search_paths: @mut libs,
         ..copy *rustc::driver::session::basic_options()
     };
 
-    let sess = driver::driver::build_session(sessopts, syntax::diagnostic::emit);
 
-    let mut crate = parse::parse_crate_from_file(crate, ~[], parsesess);
+    let mut crate = parse::parse_crate_from_file(cpath, ~[], parsesess);
     // XXX: these need to be kept in sync with the pass order in rustc::driver::compile_rest
+    let diagnostic_handler = syntax::diagnostic::mk_handler(None);
+    let span_diagnostic_handler =
+        syntax::diagnostic::mk_span_handler(diagnostic_handler, parsesess.cm);
+
+    let mut sess = driver::driver::build_session_(sessopts, parsesess.cm,
+                                                  syntax::diagnostic::emit, 
+                                                  span_diagnostic_handler);
+
     crate = front::config::strip_unconfigured_items(crate);
     crate = syntax::ext::expand::expand_crate(parsesess, ~[], crate);
     crate = front::config::strip_unconfigured_items(crate);
@@ -55,23 +66,41 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
                                    sess.opts.is_static, id_int);
     let lang_items = middle::lang_items::collect_language_items(crate, sess);
     let cmap = middle::resolve::resolve_crate(sess, lang_items, crate);
-    (crate, cmap, ast_map)
+    middle::entry::find_entry_point(sess, crate, ast_map);
+    let freevars = middle::freevars::annotate_freevars(cmap.def_map, crate);
+    let region_map = middle::region::resolve_crate(sess, cmap.def_map, crate);
+    let rp_set = middle::region::determine_rp_in_crate(sess, ast_map, cmap.def_map, crate);
+    let ty_cx = middle::ty::mk_ctxt(sess, cmap.def_map, ast_map, freevars, region_map,
+                                    rp_set, lang_items);
+
+    let (mmap, vmap) = middle::typeck::check_crate(ty_cx, copy cmap.trait_map, crate);
+    (crate, cmap, ast_map, mmap, vmap, ty_cx)
 }
 
 fn main() {
-    let cratename = Path(os::args()[1]);
-    let (crate, _cmap, amap) = get_ast_and_resolve(&cratename);
+    use extra::getopts::*;
+    let args = os::args();
+    let opts = ~[
+        optmulti("L")
+    ];
+    let matches = getopts(args.tail(), opts).get();
+    let libs = opt_strs(&matches, "L").map(|s| Path(*s));
+
+    let (crate, cmap, amap, mmap, vmap, tcx) = get_ast_and_resolve(&Path(matches.free[0]), libs);
     let mut v = RustdocVisitor::new();
     v.visit_crate(crate);
     // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
-    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x| x.clean()).collect();
+    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
+                                                                         x.clean(tcx)).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match amap.get(&x.node) {
-            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| 
+                                                                            x.clean(tcx)).collect(),
             _ => fail!("struct node_id mapped to non-item")
         }
     }
+
     // convert to json
     for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
