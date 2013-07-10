@@ -9,7 +9,8 @@ struct Foo {
 
 struct Bar {
     a: uint,
-    b: int
+    b: int,
+    c: (int, uint, Baz)
 }
 
 #[doc="foo"]
@@ -20,6 +21,6 @@ struct Baz {
 
 struct Qux;
 
-struct Quux(int, uint, Baz);
+struct Quux(/** doc */ int, uint, Baz);
 
 fn main() {}

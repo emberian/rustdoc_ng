@@ -32,7 +32,8 @@ mod jsonify;
 mod visit;
 
 fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map,
-                                         middle::typeck::method_map, middle::typeck::vtable_map) {
+                                         middle::typeck::method_map, middle::typeck::vtable_map,
+                                         middle::ty::ctxt) {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
@@ -64,23 +65,27 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
                                     rp_set, lang_items);
 
     let (mmap, vmap) = middle::typeck::check_crate(ty_cx, copy cmap.trait_map, crate);
-    (crate, cmap, ast_map, mmap, vmap)
+    (crate, cmap, ast_map, mmap, vmap, ty_cx)
 }
+
 
 fn main() {
     let cratename = Path(os::args()[1]);
-    let (crate, cmap, amap, mmap, vmap) = get_ast_and_resolve(&cratename);
+    let (crate, cmap, amap, mmap, vmap, tcx) = get_ast_and_resolve(&cratename);
     let mut v = RustdocVisitor::new();
     v.visit_crate(crate);
     // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
-    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x| x.clean()).collect();
+    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
+                                                                         x.clean(tcx)).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match amap.get(&x.node) {
-            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| 
+                                                                            x.clean(tcx)).collect(),
             _ => fail!("struct node_id mapped to non-item")
         }
     }
+
     // convert to json
     for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
