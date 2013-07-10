@@ -31,7 +31,7 @@ pub mod clean;
 mod jsonify;
 mod visit;
 
-fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map,
+fn get_ast_and_resolve(cpath: &Path) -> (@ast::crate, middle::resolve::CrateMap, ast_map::map,
                                          middle::typeck::method_map, middle::typeck::vtable_map,
                                          middle::ty::ctxt) {
     let parsesess = parse::new_parse_sess(None);
@@ -43,7 +43,7 @@ fn get_ast_and_resolve(crate: &Path) -> (@ast::crate, middle::resolve::CrateMap,
 
     let mut sess = driver::driver::build_session(sessopts, syntax::diagnostic::emit);
 
-    let mut crate = parse::parse_crate_from_file(crate, ~[], parsesess);
+    let mut crate = parse::parse_crate_from_file(cpath, ~[], parsesess);
     // XXX: these need to be kept in sync with the pass order in rustc::driver::compile_rest
     crate = front::config::strip_unconfigured_items(crate);
     crate = syntax::ext::expand::expand_crate(parsesess, ~[], crate);
