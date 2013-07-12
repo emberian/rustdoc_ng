@@ -109,34 +109,34 @@ pub struct Struct {
 }
 
 pub trait Clean<T> {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> T;
+    pub fn clean(&self) -> T;
 }
 
 impl Clean<Struct> for doctree::Struct {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Struct {
+    pub fn clean(&self) -> Struct {
         Struct {
             name: its(&self.name).to_owned(),
             node: self.node,
             struct_type: self.struct_type,
-            attrs: self.attrs.iter().transform(|x| x.clean(tcx)).collect(),
-            generics: self.generics.clean(tcx),
-            fields: self.fields.iter().transform(|x| x.clean(tcx)).collect()
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            generics: self.generics.clean(),
+            fields: self.fields.iter().transform(|x| x.clean()).collect()
         }
     }
 }
 
 impl Clean<Generics> for ast::Generics {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Generics {
+    pub fn clean(&self) -> Generics {
         Generics {
-            lifetimes: self.lifetimes.iter().transform(|x| x.clean(tcx)).collect(),
-            type_params: self.ty_params.iter().transform(|x| x.clean(tcx)).collect()
+            lifetimes: self.lifetimes.iter().transform(|x| x.clean()).collect(),
+            type_params: self.ty_params.iter().transform(|x| x.clean()).collect()
         }
     }
 }
 
 impl Clean<Attribute> for ast::attribute {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Attribute {
-        self.node.value.node.clean(tcx)
+    pub fn clean(&self) -> Attribute {
+        self.node.value.node.clean()
     }
 }
 
@@ -155,35 +155,35 @@ fn lit_to_str(lit: &ast::lit) -> ~str {
 }
 
 impl Clean<Attribute> for ast::meta_item_ {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Attribute {
+    pub fn clean(&self) -> Attribute {
         match *self {
             ast::meta_word(s) => Word(s.to_owned()),
             ast::meta_list(ref s, ref l) => List(s.to_owned(), l.iter()
-                                         .transform(|x| x.node.clean(tcx)).collect()),
+                                         .transform(|x| x.node.clean()).collect()),
             ast::meta_name_value(s, ref v) => NameValue(s.to_owned(), lit_to_str(v))
         }
     }
 }
 
 impl Clean<StructField> for doctree::StructField {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> StructField {
+    pub fn clean(&self) -> StructField {
         StructField {
             name: if self.name.is_some() { its(&self.name.unwrap()).to_owned() } else { ~"" },
-            type_: self.type_.clean(tcx),
-            attrs: self.attrs.iter().transform(|x| x.clean(tcx)).collect(),
+            type_: self.type_.clean(),
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             visibility: self.visibility
         }
     }
 }
 
 impl Clean<Lifetime> for ast::Lifetime {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Lifetime {
+    pub fn clean(&self) -> Lifetime {
         Lifetime(its(&self.ident).to_owned())
     }
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> TyParamBound {
+    pub fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
             ast::TraitTyParamBound(_t) => TraitBound(Trait::new())
@@ -192,21 +192,25 @@ impl Clean<TyParamBound> for ast::TyParamBound {
 }
 
 impl Clean<TyParam> for ast::TyParam {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> TyParam {
+    pub fn clean(&self) -> TyParam {
         TyParam {
             name: its(&self.ident).to_owned(),
-            bounds: self.bounds.iter().transform(|x| x.clean(tcx)).collect()
+            bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
     }
 }
 
-fn resolve_type(dm: &super::rustc::middle::resolve::DefMap, t: &Type) -> Type {
+fn resolve_type(t: &Type) -> Type {
+    use std::local_data::*;
     use syntax::ast::*;
 
     let id = match t {
         &Unresolved(id) => id,
         _ => return (*t).clone()
     };
+
+    let dm = *unsafe { local_data_get(super::defmapkey).unwrap() };
+    debug!("searching for %? in defmap", id);
     let d = dm.find(&id).expect("unresolved type maps to no def (this is a bug)");
 
     Resolved(match *d {
@@ -231,19 +235,18 @@ fn resolve_type(dm: &super::rustc::middle::resolve::DefMap, t: &Type) -> Type {
 }
 
 impl Clean<Type> for ast::Ty {
-    pub fn clean(&self, tcx: super::rustc::middle::ty::ctxt) -> Type {
+    pub fn clean(&self) -> Type {
         use syntax::ast::*;
         let mut t = match self.node {
             ty_nil => Unit,
             ty_box(m) | ty_uniq(m) | ty_ptr(m) | ty_rptr(_, m) => Unresolved(m.ty.id),
             ty_vec(m) | ty_fixed_length_vec(m, _) =>
-                Vector(~resolve_type(&tcx.def_map, &m.ty.clean(tcx))),
+                Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x|
-                                                          resolve_type(&tcx.def_map,
-                                                          &x.clean(tcx))).collect()),
+                                                          resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
             _ => fail!("Unimplemented type (this is a bug"),
         };
-        resolve_type(&tcx.def_map, &t)
+        resolve_type(&t)
     }
 }
