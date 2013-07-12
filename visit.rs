@@ -39,7 +39,7 @@ impl Visitor for RustdocVisitor {
                         type_:  x.node.ty,
                         attrs:  copy x.node.attrs,
                         name:  match x.node.kind { ast::named_field(id, _) => Some(id), _ => None },
-                        visibility: match x.node.kind { 
+                        visibility: match x.node.kind {
                             ast::named_field(_, vis) => Some(vis),
                             _ => None
                         },
