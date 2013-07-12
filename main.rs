@@ -51,11 +51,11 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> (@ast::crate,
         syntax::diagnostic::mk_span_handler(diagnostic_handler, parsesess.cm);
 
     let mut sess = driver::driver::build_session_(sessopts, parsesess.cm,
-                                                  syntax::diagnostic::emit, 
+                                                  syntax::diagnostic::emit,
                                                   span_diagnostic_handler);
 
     crate = front::config::strip_unconfigured_items(crate);
-    crate = syntax::ext::expand::expand_crate(parsesess, ~[], crate);
+    crate = syntax::ext::expand::expand_crate(sess.parse_sess, ~[], crate);
     crate = front::config::strip_unconfigured_items(crate);
     crate = front::std_inject::maybe_inject_libstd_ref(sess, crate);
 
@@ -95,7 +95,7 @@ fn main() {
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match amap.get(&x.node) {
-            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| 
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x|
                                                                             x.clean(tcx)).collect(),
             _ => fail!("struct node_id mapped to non-item")
         }
