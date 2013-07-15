@@ -37,3 +37,16 @@ pub struct Struct {
     attrs: ~[ast::attribute],
     fields: ~[StructField]
 }
+
+pub struct Enum {
+    variants: ~[Variant],
+    generics: ast::Generics
+}
+
+pub struct Variant {
+    name: ident,
+    attrs: ~[ast::attribute],
+    //kind: ast::variant_kind,
+    id: node_id,
+    visibility: ast::visibility
+}

@@ -108,6 +108,20 @@ pub struct Struct {
     fields: ~[StructField]
 }
 
+pub struct Enum {
+    variants: ~[Variant],
+    generics: Generics
+}
+
+pub struct Variant {
+    name: ~str,
+    attrs: ~[Attribute],
+    //kind: ast::variant_kind,
+    id: ast::node_id,
+    visibility: Visibility
+}
+
+
 pub trait Clean<T> {
     pub fn clean(&self) -> T;
 }
@@ -248,5 +262,26 @@ impl Clean<Type> for ast::Ty {
             _ => fail!("Unimplemented type (this is a bug"),
         };
         resolve_type(&t)
+    }
+}
+
+impl Clean<Enum> for doctree::Enum {
+    pub fn clean(&self) -> Enum {
+        Enum {
+            variants: self.variants.iter().transform(|x| x.clean()).collect(),
+            generics: self.generics.clean()
+        }
+    }
+}
+
+impl Clean<Variant> for doctree::Variant {
+        pub fn clean(&self) -> Variant {
+        Variant {
+            name: its(&self.name).to_owned(),
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            //kind: self.kind,
+            id: self.id,
+            visibility: self.visibility
+        }
     }
 }
