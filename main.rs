@@ -106,6 +106,8 @@ fn main() {
     // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
     let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
                                                                          x.clean()).collect();
+
+    let crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match ctxt.amap.get(&x.node) {
@@ -117,6 +119,10 @@ fn main() {
 
     // convert to json
     for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
+        println(j.to_str());
+    }
+
+    for crate_enums.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
     }
 }
