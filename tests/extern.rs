@@ -7,5 +7,3 @@ struct Bar {
     ///Is it a fizz? Or a buzz?
     fizzbuzz: bool
 }
-
-fn main() {}

@@ -87,6 +87,8 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
 
 fn main() {
     use extra::getopts::*;
+    use std::hashmap::HashMap;
+
     let args = os::args();
     let opts = ~[
         optmulti("L")
@@ -117,12 +119,11 @@ fn main() {
         }
     }
 
-    // convert to json
-    for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
-        println(j.to_str());
-    }
+    let structs = crate_structs.iter().transform(|x| x.to_json()).collect();
+    let enums = crate_enums.iter().transform(|x| x.to_json()).collect();
 
-    for crate_enums.iter().transform(|x| x.to_json()).advance |j| {
-        println(j.to_str());
-    }
+    let mut output = ~HashMap::new();
+    output.insert(~"structs", extra::json::List(structs));
+    output.insert(~"enums", extra::json::List(enums));
+    println(extra::json::Object(output).to_str());
 }

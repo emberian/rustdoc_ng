@@ -13,5 +13,3 @@ pub enum FooBarResult<U,V> {
     #[doc = "This operation failed miserably"]
     FooBarErr(V)
 }
-
-fn main() { }

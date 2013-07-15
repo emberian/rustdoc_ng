@@ -28,5 +28,3 @@ struct Blam<'self, T> {
     ///Blam!!
     blam: T
 }
-
-fn main() {}
