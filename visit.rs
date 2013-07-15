@@ -8,13 +8,15 @@ use syntax::ast;
 use doctree::*;
 
 pub struct RustdocVisitor {
-    structs: ~[Struct]
+    structs: ~[Struct],
+    enums: ~[Enum]
 }
 
 impl RustdocVisitor {
     pub fn new() -> RustdocVisitor {
         RustdocVisitor {
-            structs: ~[]
+            structs: ~[],
+            enums: ~[]
         }
     }
 }
@@ -55,5 +57,21 @@ impl Visitor for RustdocVisitor {
                 fields: fields
             }
         );
+    }
+
+    pub fn visit_enum_def(&mut self, def: &ast::enum_def, params: &ast::Generics) {
+        let mut vars: ~[Variant] = ~[];
+        for def.variants.iter().advance |&x| {
+            vars.push(Variant {
+                name: x.node.name,
+                attrs: copy x.node.attrs,
+                id: x.node.id,
+                visibility: x.node.vis
+            });
+        }
+        self.enums.push(Enum {
+            variants: vars,
+            generics: copy *params
+        });
     }
 }

@@ -30,6 +30,7 @@ impl ToJson for clean::Struct {
         o.insert(~"type", String(self.struct_type.to_str()));
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"fields", self.fields.to_json());
+        o.insert(~"generics", self.generics.to_json());
         Object(o)
     }
 }
@@ -77,6 +78,85 @@ impl ToJson for clean::Type {
         if v != extra::json::String(~"") {
             o.insert(~"value", v);
         }
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Lifetime {
+    pub fn to_json(&self) -> Json {
+        (**self).to_json()
+    }
+}
+
+impl ToJson for clean::TyParam {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"name", String(copy self.name));
+        o.insert(~"bounds", self.bounds.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::TyParamBound {
+    pub fn to_json(&self) -> Json {
+        let ret: Json = match self {
+            &clean::RegionBound => String(~"region_bound"),
+            &clean::TraitBound(ref t) => {
+                let mut o = ~HashMap::new();
+                o.insert(~"trait_bound", t.to_json());
+                Object(o)
+            }
+        };
+        ret
+    }
+}
+
+impl ToJson for clean::Trait {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"name", String(copy self.name));
+        o.insert(~"methods", self.methods.to_json());
+        o.insert(~"lifetimes", self.lifetimes.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Method { //TODO method is a stub right now
+    pub fn to_json(&self) -> Json {
+        String(~"method placeholder")
+    }
+}
+
+impl ToJson for clean::Generics {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"lifetimes", self.lifetimes.to_json());
+        o.insert(~"typarams", self.type_params.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Enum {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"variants", self.variants.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Variant {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"name", String(self.name.clone()));
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"visibility", String(match self.visibility {
+            ast::public => ~"public",
+            ast::private => ~"private",
+            ast::inherited => ~"inherited"
+        }));
         Object(o)
     }
 }
