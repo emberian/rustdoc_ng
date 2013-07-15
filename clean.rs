@@ -3,7 +3,8 @@ use its = syntax::parse::token::ident_to_str;
 use syntax;
 use syntax::ast;
 
-use super::doctree;
+use doctree;
+use visit;
 use std::local_data::*;
 
 pub enum Attribute {
@@ -123,9 +124,22 @@ pub struct Variant {
     visibility: Visibility
 }
 
+pub struct Crate {
+    structs: ~[Struct],
+    enums: ~[Enum]
+}
 
 pub trait Clean<T> {
     pub fn clean(&self) -> T;
+}
+
+impl Clean<Crate> for visit::RustdocVisitor {
+    pub fn clean(&self) -> Crate {
+        Crate {
+            structs: self.structs.iter().transform(|x| x.clean()).collect(),
+            enums: self.enums.iter().transform(|x| x.clean()).collect()
+        }
+    }
 }
 
 impl Clean<Struct> for doctree::Struct {

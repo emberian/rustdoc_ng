@@ -2,6 +2,7 @@
 
 use std::vec;
 
+use syntax;
 use syntax::visit_new::Visitor;
 use syntax::ast;
 
@@ -47,12 +48,17 @@ impl Visitor for RustdocVisitor {
                         },
                         });
         }
+        let am = unsafe { ::std::local_data::local_data_get(super::ctxtkey).unwrap() }.amap;
         self.structs.push(
             Struct {
                 node: id,
                 struct_type: struct_type,
                 name: nm,
-                attrs: ~[],
+                attrs: match am.get(&id) {
+                    &syntax::ast_map::node_item(item, _) => 
+                        item.attrs.iter().transform(|x| *x).collect(),
+                    _ => fail!("struct's node_id mapped to bogus node in the ast map")
+                },
                 generics: copy *generics,
                 fields: fields
             }

@@ -21,15 +21,15 @@ use syntax::ast_map;
 use std::os;
 use extra::json::ToJson;
 
-use visit::*;
 use syntax::visit_new::Visitor;
 
+use visit::RustdocVisitor;
 use clean::Clean;
 
 pub mod doctree;
 pub mod clean;
-mod jsonify;
-mod visit;
+pub mod jsonify;
+pub mod visit;
 
 pub fn ctxtkey(d: @DocContext) {}
 
@@ -105,25 +105,7 @@ fn main() {
 
     let mut v = RustdocVisitor::new();
     v.visit_crate(ctxt.crate);
-    // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
-    let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
-                                                                         x.clean()).collect();
+    let crate = v.clean();
 
-    let crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
-    // fill in attributes from the ast map
-    for crate_structs.mut_iter().advance |x| {
-        x.attrs = match ctxt.amap.get(&x.node) {
-            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x|
-                                                                            x.clean()).collect(),
-            _ => fail!("struct node_id mapped to non-item")
-        }
-    }
-
-    let structs = crate_structs.iter().transform(|x| x.to_json()).collect();
-    let enums = crate_enums.iter().transform(|x| x.to_json()).collect();
-
-    let mut output = ~HashMap::new();
-    output.insert(~"structs", extra::json::List(structs));
-    output.insert(~"enums", extra::json::List(enums));
-    println(extra::json::Object(output).to_str());
+    println(crate.to_json().to_str());
 }

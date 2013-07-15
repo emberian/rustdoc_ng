@@ -4,6 +4,15 @@ use extra::json::{ToJson, Json, Object, String};
 use syntax::ast;
 use clean;
 
+impl ToJson for clean::Crate {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"structs", self.structs.to_json());
+        o.insert(~"enums", self.enums.to_json());
+        Object(o)
+    }
+}
+
 impl ToJson for clean::Attribute {
     pub fn to_json(&self) -> Json {
         match *self {
@@ -55,8 +64,8 @@ impl ToJson for clean::StructField {
 
 impl ToJson for clean::Type {
     pub fn to_json(&self) -> Json {
-        use super::clean::*;
         use extra;
+        use super::clean::*;
         let mut o = ~HashMap::new();
         let (n, v) = match self {
             &Unresolved(_) => fail!("no unresolved types should survive to jsonification"),
