@@ -23,4 +23,10 @@ struct Qux;
 
 struct Quux(/** doc */ int, uint, Baz);
 
+///A Blam. T is a thing.
+struct Blam<'self, T> {
+    ///Blam!!
+    blam: T
+}
+
 fn main() {}
