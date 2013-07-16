@@ -19,9 +19,10 @@ use syntax::ast;
 use syntax::ast_map;
 
 use std::os;
+use std::local_data;
 use extra::json::ToJson;
 
-use syntax::visit_new::Visitor;
+use syntax::visit::Visitor;
 
 use visit::RustdocVisitor;
 use clean::Clean;
@@ -31,7 +32,7 @@ pub mod clean;
 pub mod jsonify;
 pub mod visit;
 
-pub fn ctxtkey(d: @DocContext) {}
+pub static ctxtkey: local_data::Key<DocContext> = &local_data::Key;
 
 struct DocContext {
     crate: @ast::crate,
@@ -96,12 +97,12 @@ fn main() {
     let matches = getopts(args.tail(), opts).get();
     let libs = opt_strs(&matches, "L").map(|s| Path(*s));
 
-    let ctxt = @get_ast_and_resolve(&Path(matches.free[0]), libs);
+    let ctxt = get_ast_and_resolve(&Path(matches.free[0]), libs);
     debug!("defmap:");
     for ctxt.cmap.def_map.iter().advance |(k, v)| {
         debug!("%?: %?", k, v);
     }
-    unsafe { std::local_data::local_data_set(ctxtkey, ctxt); }
+    local_data::set(ctxtkey, ctxt);
 
     let mut v = RustdocVisitor::new();
     v.visit_crate(ctxt.crate);
