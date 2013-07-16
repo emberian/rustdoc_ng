@@ -40,7 +40,8 @@ pub struct Struct {
 
 pub struct Enum {
     variants: ~[Variant],
-    generics: ast::Generics
+    generics: ast::Generics,
+    attrs: ~[ast::attribute]
 }
 
 pub struct Variant {
@@ -49,4 +50,10 @@ pub struct Variant {
     //kind: ast::variant_kind,
     id: node_id,
     visibility: ast::visibility
+}
+
+pub struct Function {
+    decl: ast::fn_decl,
+    body: ast::blk,
+    id: node_id
 }
