@@ -95,7 +95,7 @@ fn main() {
     let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
                                                                          x.clean()).collect();
 
-    let crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
+    let mut crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match amap.get(&x.node) {

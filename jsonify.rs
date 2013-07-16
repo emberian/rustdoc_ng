@@ -142,6 +142,7 @@ impl ToJson for clean::Enum {
         let mut o = ~HashMap::new();
         o.insert(~"variants", self.variants.to_json());
         o.insert(~"generics", self.generics.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }
 }

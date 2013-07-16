@@ -40,7 +40,8 @@ pub struct Struct {
 
 pub struct Enum {
     variants: ~[Variant],
-    generics: ast::Generics
+    generics: ast::Generics,
+    attrs: ~[ast::attribute]
 }
 
 pub struct Variant {
