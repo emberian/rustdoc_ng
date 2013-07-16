@@ -31,11 +31,16 @@ pub mod clean;
 mod jsonify;
 mod visit;
 
-pub fn defmapkey(d: @middle::resolve::DefMap) {}
+pub fn ctxtkey(d: @DocContext) {}
 
-fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) ->
-                       (@ast::crate, middle::resolve::CrateMap, ast_map::map) {
+struct DocContext {
+    crate: @ast::crate,
+    cmap: middle::resolve::CrateMap,
+    amap: ast_map::map,
+    sess: driver::session::Session
+}
 
+fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
@@ -70,7 +75,14 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) ->
     middle::entry::find_entry_point(sess, crate, ast_map);
     let freevars = middle::freevars::annotate_freevars(cmap.def_map, crate);
     let region_map = middle::region::resolve_crate(sess, cmap.def_map, crate);
-    (crate, cmap, ast_map)
+    middle::entry::find_entry_point(sess, crate, ast_map);
+    let freevars = middle::freevars::annotate_freevars(cmap.def_map, crate);
+    let region_map = middle::region::resolve_crate(sess, cmap.def_map, crate);
+    let rp_set = middle::region::determine_rp_in_crate(sess, ast_map, cmap.def_map, crate);
+    let ty_cx = middle::ty::mk_ctxt(sess, cmap.def_map, ast_map, freevars, region_map, rp_set, lang_items);
+
+    let (_mmap, _vmap) = middle::typeck::check_crate(ty_cx, copy cmap.trait_map, crate);
+    DocContext { crate: crate, cmap: cmap, amap: ast_map, sess: sess }
 }
 
 fn main() {
@@ -82,15 +94,15 @@ fn main() {
     let matches = getopts(args.tail(), opts).get();
     let libs = opt_strs(&matches, "L").map(|s| Path(*s));
 
-    let (crate, cmap, amap) = get_ast_and_resolve(&Path(matches.free[0]), libs);
+    let ctxt = @get_ast_and_resolve(&Path(matches.free[0]), libs);
     debug!("defmap:");
-    for cmap.def_map.iter().advance |(k, v)| {
+    for ctxt.cmap.def_map.iter().advance |(k, v)| {
         debug!("%?: %?", k, v);
     }
-    unsafe { std::local_data::local_data_set(defmapkey, @cmap.def_map); }
+    unsafe { std::local_data::local_data_set(ctxtkey, ctxt); }
 
     let mut v = RustdocVisitor::new();
-    v.visit_crate(crate);
+    v.visit_crate(ctxt.crate);
     // clean data (de-@'s stuff, ignores uneeded data, stringifies things)
     let mut crate_structs: ~[clean::Struct] = v.structs.iter().transform(|x|
                                                                          x.clean()).collect();
@@ -98,7 +110,7 @@ fn main() {
     let mut crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
-        x.attrs = match amap.get(&x.node) {
+        x.attrs = match ctxt.amap.get(&x.node) {
             &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x|
                                                                             x.clean()).collect(),
             _ => fail!("struct node_id mapped to non-item")

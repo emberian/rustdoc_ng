@@ -1,8 +1,10 @@
 use its = syntax::parse::token::ident_to_str;
 
+use syntax;
 use syntax::ast;
 
 use super::doctree;
+use std::local_data::*;
 
 pub enum Attribute {
     Word(~str),
@@ -216,7 +218,6 @@ impl Clean<TyParam> for ast::TyParam {
 }
 
 fn resolve_type(t: &Type) -> Type {
-    use std::local_data::*;
     use syntax::ast::*;
 
     let id = match t {
@@ -224,9 +225,17 @@ fn resolve_type(t: &Type) -> Type {
         _ => return (*t).clone()
     };
 
-    let dm = *unsafe { local_data_get(super::defmapkey).unwrap() };
+    let dm = unsafe { local_data_get(super::ctxtkey).unwrap() }.cmap.def_map;
     debug!("searching for %? in defmap", id);
-    let d = dm.find(&id).expect("unresolved type maps to no def (this is a bug)");
+    let d = match dm.find(&id) {
+        Some(k) => k,
+        None => {
+            let ctxt = unsafe { local_data_get(super::ctxtkey).unwrap() };
+            debug!("could not find %? in defmap (`%s`)", id,
+                   syntax::ast_map::node_id_to_str(ctxt.amap, id, ctxt.sess.intr()));
+            fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
+        }
+    };
 
     Resolved(match *d {
         def_fn(i, _) => i.node,
@@ -252,6 +261,9 @@ fn resolve_type(t: &Type) -> Type {
 impl Clean<Type> for ast::Ty {
     pub fn clean(&self) -> Type {
         use syntax::ast::*;
+        debug!("cleaning type `%?`", self);
+        let codemap = unsafe { local_data_get(super::ctxtkey).unwrap() }.sess.codemap;
+        debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let mut t = match self.node {
             ty_nil => Unit,
             ty_box(m) | ty_uniq(m) | ty_ptr(m) | ty_rptr(_, m) => Unresolved(m.ty.id),
