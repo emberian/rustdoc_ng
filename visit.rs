@@ -77,7 +77,8 @@ impl Visitor for RustdocVisitor {
         }
         self.enums.push(Enum {
             variants: vars,
-            generics: copy *params
+            generics: copy *params,
+            attrs: ~[]
         });
     }
 }

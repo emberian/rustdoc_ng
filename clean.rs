@@ -113,7 +113,8 @@ pub struct Struct {
 
 pub struct Enum {
     variants: ~[Variant],
-    generics: Generics
+    generics: Generics,
+    attrs: ~[Attribute]
 }
 
 pub struct Variant {
@@ -295,7 +296,8 @@ impl Clean<Enum> for doctree::Enum {
     pub fn clean(&self) -> Enum {
         Enum {
             variants: self.variants.iter().transform(|x| x.clean()).collect(),
-            generics: self.generics.clean()
+            generics: self.generics.clean(),
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect()
         }
     }
 }
