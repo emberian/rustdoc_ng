@@ -1,5 +1,5 @@
 use std::hashmap::HashMap;
-use extra::json::{ToJson, Json, Object, String};
+use extra::json::{ToJson, Json, Object, String, Boolean};
 
 use syntax::ast;
 use clean;
@@ -9,6 +9,7 @@ impl ToJson for clean::Crate {
         let mut o = ~HashMap::new();
         o.insert(~"structs", self.structs.to_json());
         o.insert(~"enums", self.enums.to_json());
+        o.insert(~"fns", self.fns.to_json());
         Object(o)
     }
 }
@@ -77,11 +78,13 @@ impl ToJson for clean::Type {
                               _ => fail!("non-numeric primitive survived to jsonification"),
                               }
                              ),
-                             &Tuple(ref t) => (~"tuple", t.to_json()),
-                             &Vector(ref t) => (~"vector", t.to_json()),
-                             &String => (~"string", extra::json::String(~"")),
-                             &Bool => (~"bool", extra::json::String(~"")),
-                             &Unit => (~"unit", extra::json::String(~"")),
+            &Unique(ref t) => (~"unique", t.to_json()),
+            &Managed(ref t) => (~"managed", t.to_json()),
+            &Tuple(ref t) => (~"tuple", t.to_json()),
+            &Vector(ref t) => (~"vector", t.to_json()),
+            &String => (~"string", extra::json::String(~"")),
+            &Bool => (~"primitive", extra::json::String(~"bool")),
+            &Unit => (~"unit", extra::json::String(~"")),
         };
         o.insert(~"type", extra::json::String(n));
         if v != extra::json::String(~"") {
@@ -168,5 +171,44 @@ impl ToJson for clean::Variant {
             ast::inherited => ~"inherited"
         }));
         Object(o)
+    }
+}
+
+impl ToJson for clean::Function {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"decl", self.decl.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::FnDecl {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"arguments", self.inputs.to_json());
+        o.insert(~"output", self.output.to_json());
+        o.insert(~"return_style", self.cf.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Argument {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"mutable", Boolean(self.mutable));
+        o.insert(~"type", self.ty.to_json());
+        o.insert(~"id", String(self.id.to_str()));
+        Object(o)
+    }
+}
+
+impl ToJson for clean::RetStyle {
+    pub fn to_json(&self) -> Json {
+        String(match *self {
+            clean::NoReturn => ~"no_return",
+            clean::Return => ~"return"
+        })
     }
 }

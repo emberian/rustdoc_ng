@@ -3,21 +3,24 @@
 use std::vec;
 
 use syntax;
-use syntax::visit_new::Visitor;
+use syntax::visit_new::{Visitor,FnKind};
 use syntax::ast;
+use syntax::codemap::span;
 
 use doctree::*;
 
 pub struct RustdocVisitor {
     structs: ~[Struct],
-    enums: ~[Enum]
+    enums: ~[Enum],
+    fns: ~[Function]
 }
 
 impl RustdocVisitor {
     pub fn new() -> RustdocVisitor {
         RustdocVisitor {
             structs: ~[],
-            enums: ~[]
+            enums: ~[],
+            fns: ~[]
         }
     }
 }
@@ -79,6 +82,19 @@ impl Visitor for RustdocVisitor {
             variants: vars,
             generics: copy *params,
             attrs: ~[]
+        });
+    }
+
+    pub fn visit_fn(&mut self, fk: &FnKind, fd: &ast::fn_decl, body: &ast::blk, sp: span, id: ast::node_id) {
+        let am = unsafe { ::std::local_data::local_data_get(super::ctxtkey).unwrap() }.amap;
+        self.fns.push(Function {
+            id: id,
+            attrs: match am.get(&id) {
+                &syntax::ast_map::node_item(item, _) => item.attrs.iter().transform(|x| *x).collect(),
+                _ => fail!("fn's node_id mapped to bogus node in the ast map")
+            },
+            decl: copy *fd,
+            body: copy *body
         });
     }
 }

@@ -105,7 +105,13 @@ fn main() {
 
     let mut v = RustdocVisitor::new();
     v.visit_crate(ctxt.crate);
-    let crate = v.clean();
+    let mut crate = v.clean();
 
+    for crate.fns.mut_iter().advance |x| {
+        x.attrs = match ctxt.amap.get(&x.id) {
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            _ => fail!("function mapped to non-item")
+        }
+    }
     println(crate.to_json().to_str());
 }
