@@ -108,6 +108,7 @@ fn main() {
                                                                          x.clean()).collect();
 
     let mut crate_enums: ~[clean::Enum] = v.enums.iter().transform(|x| x.clean()).collect();
+    let mut crate_fns: ~[clean::Function] = v.funcs.iter().transform(|x| x.clean()).collect();
     // fill in attributes from the ast map
     for crate_structs.mut_iter().advance |x| {
         x.attrs = match ctxt.amap.get(&x.node) {
@@ -117,12 +118,23 @@ fn main() {
         }
     }
 
+    for crate_fns.mut_iter().advance |x| {
+        x.attrs = match ctxt.amap.get(&x.id) {
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            _ => fail!("function mapped to non-item")
+        }
+    }
+
     // convert to json
     for crate_structs.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
     }
 
     for crate_enums.iter().transform(|x| x.to_json()).advance |j| {
+        println(j.to_str());
+    }
+
+    for crate_fns.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
     }
 }

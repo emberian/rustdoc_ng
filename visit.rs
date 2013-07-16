@@ -2,21 +2,24 @@
 
 use std::vec;
 
-use syntax::visit_new::Visitor;
+use syntax::visit_new::{Visitor,FnKind};
 use syntax::ast;
+use syntax::codemap::span;
 
 use doctree::*;
 
 pub struct RustdocVisitor {
     structs: ~[Struct],
-    enums: ~[Enum]
+    enums: ~[Enum],
+    funcs: ~[Function]
 }
 
 impl RustdocVisitor {
     pub fn new() -> RustdocVisitor {
         RustdocVisitor {
             structs: ~[],
-            enums: ~[]
+            enums: ~[],
+            funcs: ~[]
         }
     }
 }
@@ -73,6 +76,14 @@ impl Visitor for RustdocVisitor {
             variants: vars,
             generics: copy *params,
             attrs: ~[]
+        });
+    }
+
+    pub fn visit_fn(&mut self, fk: &FnKind, fd: &ast::fn_decl, body: &ast::blk, sp: span, id: ast::node_id) {
+        self.funcs.push(Function {
+            id: id,
+            decl: copy *fd,
+            body: copy *body
         });
     }
 }

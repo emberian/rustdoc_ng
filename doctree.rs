@@ -51,3 +51,9 @@ pub struct Variant {
     id: node_id,
     visibility: ast::visibility
 }
+
+pub struct Function {
+    decl: ast::fn_decl,
+    body: ast::blk,
+    id: node_id
+}

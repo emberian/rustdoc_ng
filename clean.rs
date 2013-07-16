@@ -39,11 +39,57 @@ impl Generics {
     }
 }
 
-pub struct Method;
+pub struct Method {
+    ident: ~str,
+    attrs: ~[Attribute],
+    generics: Generics,
+    //explicit_self: ExplicitSelf,
+    id: ast::node_id,
+    vis: Visibility
+}
+
+pub struct TyMethod {
+    ident: ~str,
+    attrs: ~[Attribute],
+    generics: Generics,
+    id: ast::node_id,
+
+}
+
+pub enum TraitMethod {
+    Required(TyMethod),
+    Provided(Method)
+}
+
+pub struct Function {
+    decl: FnDecl,
+    //body: Block,
+    id: ast::node_id,
+    attrs: ~[Attribute]
+}
+
+pub struct FnDecl {
+    inputs: ~[Argument],
+    output: @Type,
+    cf: RetStyle,
+    attrs: ~[Attribute]
+}
+
+pub struct Argument {
+    mutable: bool,
+    ty: @Type,
+    //TODO pat
+    id: ast::node_id
+}
+
+pub enum RetStyle {
+    NoReturn,
+    Return
+}
 
 pub struct Trait {
     name: ~str,
-    methods: ~[Method],
+    methods: ~[Method], //should be TraitMethod
     lifetimes: ~[Lifetime],
     generics: Generics
 }
@@ -75,6 +121,9 @@ pub enum Type {
     Bool,
     /// aka ty_nil
     Unit,
+    Unique(~Type),
+    Managed(~Type),
+    // region, raw, other boxes, mutable
 }
 
 impl Clone for Type {
@@ -87,7 +136,9 @@ impl Clone for Type {
             Vector(ref __self_0) => Vector(__self_0.clone()),
             String => String,
             Bool => Bool,
-            Unit => Unit
+            Unit => Unit,
+            Unique(ref __self_0) => Unique(__self_0.clone()),
+            Managed(ref __self_0) => Managed(__self_0.clone())
         }
     }
 }
@@ -266,7 +317,9 @@ impl Clean<Type> for ast::Ty {
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let mut t = match self.node {
             ty_nil => Unit,
-            ty_box(m) | ty_uniq(m) | ty_ptr(m) | ty_rptr(_, m) => Unresolved(m.ty.id),
+            ty_ptr(m) | ty_rptr(_, m) => resolve_type(&m.ty.clean()),
+            ty_box(m) => Managed(~resolve_type(&m.ty.clean())),
+            ty_uniq(m) => Unique(~resolve_type(&m.ty.clean())),
             ty_vec(m) | ty_fixed_length_vec(m, _) =>
                 Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x|
@@ -289,13 +342,53 @@ impl Clean<Enum> for doctree::Enum {
 }
 
 impl Clean<Variant> for doctree::Variant {
-        pub fn clean(&self) -> Variant {
+    pub fn clean(&self) -> Variant {
         Variant {
             name: its(&self.name).to_owned(),
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             //kind: self.kind,
             id: self.id,
             visibility: self.visibility
+        }
+    }
+}
+
+impl Clean<Function> for doctree::Function {
+    pub fn clean(&self) -> Function {
+        Function {
+            decl: self.decl.clean(),
+            id: self.id,
+            attrs: ~[]
+        }
+    }
+}
+
+impl Clean<FnDecl> for ast::fn_decl {
+    pub fn clean(&self) -> FnDecl {
+        FnDecl {
+            inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
+            output: @(self.output.clean()),
+            cf: self.cf.clean(),
+            attrs: ~[]
+        }
+    }
+}
+
+impl Clean<Argument> for ast::arg {
+    pub fn clean(&self) -> Argument {
+        Argument {
+            mutable: self.is_mutbl,
+            ty: @(self.ty.clean()),
+            id: self.id
+        }
+    }
+}
+
+impl Clean<RetStyle> for ast::ret_style {
+    pub fn clean(&self) -> RetStyle {
+        match *self {
+            ast::return_val => Return,
+            ast::noreturn => NoReturn
         }
     }
 }
