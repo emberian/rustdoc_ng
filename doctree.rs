@@ -1,5 +1,6 @@
 //! The simplified AST used by rustdoc
 
+use syntax::codemap::span;
 use syntax::ast;
 use syntax::ast::{ident, node_id};
 
@@ -22,7 +23,7 @@ pub enum TypeBound {
 
 pub struct StructField {
     id: node_id,
-    type_: @ast::Ty,
+    type_: ast::Ty,
     /// Name is optional for tuple structs
     name: Option<ident>,
     attrs: ~[ast::attribute],
@@ -30,31 +31,37 @@ pub struct StructField {
 }
 
 pub struct Struct {
-    node: node_id,
+    id: node_id,
     struct_type: StructType,
     name: ident,
     generics: ast::Generics,
     attrs: ~[ast::attribute],
-    fields: ~[StructField]
+    fields: ~[StructField],
+    where: span,
 }
 
 pub struct Enum {
     variants: ~[Variant],
     generics: ast::Generics,
-    attrs: ~[ast::attribute]
+    attrs: ~[ast::attribute],
+    id: node_id,
+    where: span,
+    name: ident,
 }
 
 pub struct Variant {
     name: ident,
     attrs: ~[ast::attribute],
     //kind: ast::variant_kind,
-    id: node_id,
     visibility: ast::visibility
 }
 
 pub struct Function {
     decl: ast::fn_decl,
-    body: ast::blk,
     attrs: ~[ast::attribute],
-    id: node_id
+    id: node_id,
+    name: ident,
+    visibility: ast::visibility,
+    where: span,
+    generics: ast::Generics,
 }

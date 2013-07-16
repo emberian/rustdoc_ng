@@ -5,7 +5,7 @@ use syntax::ast;
 
 use doctree;
 use visit;
-use std::local_data::*;
+use std::local_data;
 
 pub enum Attribute {
     Word(~str),
@@ -199,7 +199,7 @@ impl Clean<Struct> for doctree::Struct {
     pub fn clean(&self) -> Struct {
         Struct {
             name: its(&self.name).to_owned(),
-            node: self.node,
+            node: self.id,
             struct_type: self.struct_type,
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
@@ -269,7 +269,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     pub fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
-            ast::TraitTyParamBound(_t) => TraitBound(Trait::new())
+            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
         }
     }
 }
@@ -291,12 +291,12 @@ fn resolve_type(t: &Type) -> Type {
         _ => return (*t).clone()
     };
 
-    let dm = unsafe { local_data_get(super::ctxtkey).unwrap() }.cmap.def_map;
+    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).cmap.def_map;
     debug!("searching for %? in defmap", id);
     let d = match dm.find(&id) {
         Some(k) => k,
         None => {
-            let ctxt = unsafe { local_data_get(super::ctxtkey).unwrap() };
+            let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
                    syntax::ast_map::node_id_to_str(ctxt.amap, id, ctxt.sess.intr()));
             fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
@@ -328,17 +328,15 @@ impl Clean<Type> for ast::Ty {
     pub fn clean(&self) -> Type {
         use syntax::ast::*;
         debug!("cleaning type `%?`", self);
-        let codemap = unsafe { local_data_get(super::ctxtkey).unwrap() }.sess.codemap;
+        let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let mut t = match self.node {
             ty_nil => Unit,
-            ty_ptr(m) | ty_rptr(_, m) => resolve_type(&m.ty.clean()),
-            ty_box(m) => Managed(~resolve_type(&m.ty.clean())),
-            ty_uniq(m) => Unique(~resolve_type(&m.ty.clean())),
-            ty_vec(m) | ty_fixed_length_vec(m, _) =>
-                Vector(~resolve_type(&m.ty.clean())),
-            ty_tup(ref tys) => Tuple(tys.iter().transform(|x|
-                                                          resolve_type(&x.clean())).collect()),
+            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
+            ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
+            ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
+            ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
+            ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
             _ => fail!("Unimplemented type (this is a bug"),
         };
