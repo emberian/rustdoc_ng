@@ -164,7 +164,6 @@ impl ToJson for clean::Variant {
         let mut o = ~HashMap::new();
         o.insert(~"name", String(self.name.clone()));
         o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"id", String(self.id.to_str()));
         o.insert(~"visibility", String(match self.visibility {
             ast::public => ~"public",
             ast::private => ~"private",

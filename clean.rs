@@ -172,7 +172,6 @@ pub struct Variant {
     name: ~str,
     attrs: ~[Attribute],
     //kind: ast::variant_kind,
-    id: ast::node_id,
     visibility: Visibility
 }
 
@@ -363,7 +362,6 @@ impl Clean<Variant> for doctree::Variant {
             name: its(&self.name).to_owned(),
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             //kind: self.kind,
-            id: self.id,
             visibility: self.visibility
         }
     }
