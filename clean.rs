@@ -64,6 +64,10 @@ pub enum TraitMethod {
 
 pub struct Function {
     decl: FnDecl,
+    name: ~str,
+    visibility: Visibility,
+    where: ~str,
+    generics: Generics,
     //body: Block,
     id: ast::node_id,
     attrs: ~[Attribute]
@@ -155,6 +159,7 @@ pub type Visibility = ast::visibility;
 
 pub struct Struct {
     name: ~str,
+    where: ~str,
     node: ast::node_id,
     struct_type: doctree::StructType,
     attrs: ~[Attribute],
@@ -165,7 +170,10 @@ pub struct Struct {
 pub struct Enum {
     variants: ~[Variant],
     generics: Generics,
-    attrs: ~[Attribute]
+    attrs: ~[Attribute],
+    name: ~str,
+    node: ast::node_id,
+    where: ~str,
 }
 
 pub struct Variant {
@@ -203,7 +211,8 @@ impl Clean<Struct> for doctree::Struct {
             struct_type: self.struct_type,
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
-            fields: self.fields.iter().transform(|x| x.clean()).collect()
+            fields: self.fields.iter().transform(|x| x.clean()).collect(),
+            where: self.where.clean(),
         }
     }
 }
@@ -349,7 +358,10 @@ impl Clean<Enum> for doctree::Enum {
         Enum {
             variants: self.variants.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect()
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            name: its(&self.name).to_owned(),
+            where: self.where.clean(),
+            node: self.id
         }
     }
 }
@@ -369,9 +381,20 @@ impl Clean<Function> for doctree::Function {
     pub fn clean(&self) -> Function {
         Function {
             decl: self.decl.clean(),
+            name: its(&self.name).to_owned(),
             id: self.id,
-            attrs: ~[]
+            attrs: self.attrs.clean(),
+            where: self.where.clean(),
+            visibility: self.visibility,
+            generics: self.generics.clean(),
         }
+    }
+}
+
+impl Clean<~str> for syntax::codemap::span {
+    pub fn clean(&self) -> ~str {
+        let cm = local_data::get(super::ctxtkey, |x| copy *x.unwrap()).sess.codemap;
+        cm.span_to_str(*self)
     }
 }
 
@@ -402,5 +425,11 @@ impl Clean<RetStyle> for ast::ret_style {
             ast::return_val => Return,
             ast::noreturn => NoReturn
         }
+    }
+}
+
+impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
+    pub fn clean(&self) -> ~[U] {
+        self.iter().transform(|x| x.clean()).collect()
     }
 }
