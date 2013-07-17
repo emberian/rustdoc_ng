@@ -35,7 +35,7 @@ impl RustdocVisitor {
     pub fn visit(@mut self, crate: &ast::crate) {
         fn visit_struct_def(item: &ast::item, sd: @ast::struct_def, generics:
                             &ast::Generics, rcx: rdv) {
-            debug!("Visiting struct with item %?", item);
+            debug!("Visiting struct");
             let mut struct_type = Plain;
             let mut fields: ~[StructField] = vec::with_capacity(sd.fields.len());
             if sd.ctor_id.is_some() {
@@ -73,7 +73,7 @@ impl RustdocVisitor {
         }
 
         fn visit_enum_def(it: &ast::item, def: &ast::enum_def, params: &ast::Generics, rcx: rdv) {
-            debug!("Visiting enum with item %?", it);
+            debug!("Visiting enum");
             let mut vars: ~[Variant] = ~[];
             for def.variants.iter().advance |x| {
                 vars.push(Variant {
@@ -94,8 +94,7 @@ impl RustdocVisitor {
 
         fn visit_fn(item: &ast::item, fd: &ast::fn_decl, purity: &ast::purity,
                      abi: &AbiSet, gen: &ast::Generics, rcx: rdv) {
-            debug!("Visiting fn with item %?", item);
-            let am = local_data::get(super::ctxtkey, |x| *x.unwrap()).amap;
+            debug!("Visiting fn");
             rcx.fns.push(Function {
                 id: item.id,
                 attrs: copy item.attrs,

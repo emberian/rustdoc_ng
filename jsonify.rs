@@ -41,7 +41,7 @@ impl ToJson for clean::Struct {
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"fields", self.fields.to_json());
         o.insert(~"generics", self.generics.to_json());
-        o.insert(~"where", self.where.to_json());
+        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -157,7 +157,7 @@ impl ToJson for clean::Enum {
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"name", self.name.to_json());
-        o.insert(~"where", self.where.to_json());
+        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -182,7 +182,7 @@ impl ToJson for clean::Function {
         o.insert(~"id", String(self.id.to_str()));
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"decl", self.decl.to_json());
-        o.insert(~"where", self.where.to_json());
+        o.insert(~"source", self.where.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"name", self.name.to_json());
         Object(o)

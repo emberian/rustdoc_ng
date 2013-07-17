@@ -300,14 +300,14 @@ fn resolve_type(t: &Type) -> Type {
         _ => return (*t).clone()
     };
 
-    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).cmap.def_map;
+    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.def_map;
     debug!("searching for %? in defmap", id);
     let d = match dm.find(&id) {
         Some(k) => k,
         None => {
             let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
-                   syntax::ast_map::node_id_to_str(ctxt.amap, id, ctxt.sess.intr()));
+                   syntax::ast_map::node_id_to_str(ctxt.tycx.items, id, ctxt.sess.intr()));
             fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
         }
     };
