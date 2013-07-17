@@ -60,7 +60,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     let mut sess = driver::driver::build_session_(sessopts, parsesess.cm,
                                                   syntax::diagnostic::emit,
                                                   span_diagnostic_handler);
-
+    crate = syntax::ext::expand::inject_std_macros(sess.parse_sess, copy sessopts.cfg, crate);
     crate = front::config::strip_unconfigured_items(crate);
     crate = syntax::ext::expand::expand_crate(sess.parse_sess, ~[], crate);
     crate = front::config::strip_unconfigured_items(crate);
