@@ -38,8 +38,8 @@ impl StructField {
         };
         StructField {
             id: sf.id,
-            type_: copy sf.ty,
-            attrs: copy sf.attrs,
+            type_: sf.ty.clone(),
+            attrs: sf.attrs.clone(),
             name: name,
             visibility: vis,
         }

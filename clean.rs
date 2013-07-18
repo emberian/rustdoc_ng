@@ -114,6 +114,7 @@ impl Trait {
 /// A representation of a Type suitable for hyperlinking purposes. Ideally one can get the original
 /// type out of the AST/ty::ctxt given one of these, if more information is needed. Most importantly
 /// it does not preserve mutability or boxes.
+#[deriving(Clone)]
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
@@ -136,25 +137,6 @@ pub enum Type {
     Unique(~Type),
     Managed(~Type),
     // region, raw, other boxes, mutable
-}
-
-impl Clone for Type {
-    pub fn clone(&self) -> Type {
-        match *self {
-            Unresolved(ref __self_0) => Unresolved(__self_0.clone()),
-            Resolved(ref __self_0) => Resolved(__self_0.clone()),
-            Generic(ref __self_0) => Generic(__self_0.clone()),
-            Self(ref __self_0) => Self(__self_0.clone()),
-            Primitive(ref __self_0) => Primitive(*__self_0.clone()),
-            Tuple(ref __self_0) => Tuple(__self_0.clone()),
-            Vector(ref __self_0) => Vector(__self_0.clone()),
-            String => String,
-            Bool => Bool,
-            Unit => Unit,
-            Unique(ref __self_0) => Unique(__self_0.clone()),
-            Managed(ref __self_0) => Managed(__self_0.clone())
-        }
-    }
 }
 
 pub struct StructField {
@@ -316,6 +298,7 @@ impl Clean<TyParam> for ast::TyParam {
     }
 }
 
+/// Given a Type, resolve it using the def_map
 fn resolve_type(t: &Type) -> Type {
     use syntax::ast::*;
 
@@ -441,7 +424,7 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
 
 impl Clean<~str> for syntax::codemap::span {
     pub fn clean(&self) -> ~str {
-        let cm = local_data::get(super::ctxtkey, |x| copy *x.unwrap()).sess.codemap;
+        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
         cm.span_to_str(*self)
     }
 }

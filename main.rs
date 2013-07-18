@@ -40,13 +40,14 @@ struct DocContext {
     sess: driver::session::Session
 }
 
+/// Parses, resolves, and typechecks the given crate
 fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     let parsesess = parse::new_parse_sess(None);
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
         maybe_sysroot: Some(@std::os::self_exe_path().get().pop()),
         addl_lib_search_paths: @mut libs,
-        ..copy *rustc::driver::session::basic_options()
+        .. (*rustc::driver::session::basic_options()).clone()
     };
 
 
@@ -58,8 +59,8 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
                                                   syntax::diagnostic::emit,
                                                   span_diagnostic_handler);
 
-    let (crate, tycx) = driver::driver::compile_upto(sess, copy sessopts.cfg,
-                                                     &driver::driver::file_input(copy *cpath),
+    let (crate, tycx) = driver::driver::compile_upto(sess, sessopts.cfg.clone(),
+                                                     &driver::driver::file_input(cpath.clone()),
                                                      driver::driver::cu_typeck, None);
                                                      
     DocContext { crate: crate.unwrap(), tycx: tycx.unwrap(), sess: sess }

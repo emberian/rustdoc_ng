@@ -115,7 +115,7 @@ impl ToJson for clean::Lifetime {
 impl ToJson for clean::TyParam {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"name", String(copy self.name));
+        o.insert(~"name", self.name.to_json());
         o.insert(~"bounds", self.bounds.to_json());
         o.insert(~"id", self.node.to_json());
         Object(o)
@@ -139,7 +139,7 @@ impl ToJson for clean::TyParamBound {
 impl ToJson for clean::Trait {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"name", String(copy self.name));
+        o.insert(~"name", self.name.to_json());
         o.insert(~"methods", self.methods.to_json());
         o.insert(~"lifetimes", self.lifetimes.to_json());
         o.insert(~"generics", self.generics.to_json());

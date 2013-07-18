@@ -47,8 +47,8 @@ impl RustdocVisitor {
                     id: item.id,
                     struct_type: struct_type,
                     name: item.ident,
-                    attrs: copy item.attrs,
-                    generics: copy *generics,
+                    attrs: item.attrs.clone(),
+                    generics: generics.clone(),
                     fields: fields,
                     where: item.span
                 }
@@ -61,16 +61,16 @@ impl RustdocVisitor {
             for def.variants.iter().advance |x| {
                 vars.push(Variant {
                     name: x.node.name,
-                    attrs: copy x.node.attrs,
+                    attrs: x.node.attrs.clone(),
                     visibility: x.node.vis,
-                    kind: copy x.node.kind,
+                    kind: x.node.kind.clone(),
                 });
             }
             rcx.enums.push(Enum {
                 name: it.ident,
                 variants: vars,
-                generics: copy *params,
-                attrs: copy it.attrs,
+                generics: params.clone(),
+                attrs: it.attrs.clone(),
                 id: it.id,
                 where: it.span,
             });
@@ -81,12 +81,12 @@ impl RustdocVisitor {
             debug!("Visiting fn");
             rcx.fns.push(Function {
                 id: item.id,
-                attrs: copy item.attrs,
-                decl: copy *fd,
+                attrs: item.attrs.clone(),
+                decl: fd.clone(),
                 name: item.ident,
                 visibility: item.vis,
                 where: item.span,
-                generics: copy *gen,
+                generics: gen.clone(),
             });
         }
 
@@ -94,7 +94,7 @@ impl RustdocVisitor {
             debug!("Visiting item %?", item);
             match item.node {
                 ast::item_mod(ref m) => {
-                    for m.items.iter().advance |i| { (vt.visit_item)(*i, (copy rcx, vt)); }
+                    for m.items.iter().advance |i| { (vt.visit_item)(*i, (rcx.clone(), vt)); }
                 },
                 ast::item_enum(ref ed, ref gen) => visit_enum_def(item, ed, gen, rcx),
                 ast::item_struct(sd, ref gen) => visit_struct_def(item, sd, gen, rcx),
