@@ -7,6 +7,7 @@ use doctree;
 use visit;
 use std::local_data;
 
+#[deriving(Clone)]
 pub enum Attribute {
     Word(~str),
     List(~str, ~[Attribute]),
@@ -214,7 +215,7 @@ impl Clean<Struct> for doctree::Struct {
             name: its(&self.name).to_owned(),
             node: self.id,
             struct_type: self.struct_type,
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             generics: self.generics.clean(),
             fields: self.fields.iter().transform(|x| x.clean()).collect(),
             where: self.where.clean(),
@@ -251,13 +252,38 @@ fn lit_to_str(lit: &ast::lit) -> ~str {
     }
 }
 
+fn remove_comment_tags(s: &str) -> ~str {
+    match s.slice(0,3) {
+        &"///" => return s.slice(3, s.len()).trim().to_owned(),
+        &"/**" | &"/*!" => return s.slice(3, s.len() - 2).trim().to_owned(),
+        _ => return s.trim().to_owned()
+    }
+}
+
+fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
+    let mut docstr = ~"";
+    for attrs.iter().advance |at| {
+        match *at {
+            NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", s.clone())),
+            _ => ()
+        }
+    }
+    let mut a = attrs.iter().filter(|&a| match a {
+        &NameValue(~"doc", _) => false,
+        _ => true
+    }).transform(|x| x.clone()).collect::<~[Attribute]>();
+    a.push(NameValue(~"doc", docstr.trim().to_owned()));
+    a
+}
+
 impl Clean<Attribute> for ast::meta_item_ {
     pub fn clean(&self) -> Attribute {
         match *self {
-            ast::meta_word(s) => Word(s.to_owned()),
+            ast::meta_word(s) => Word(remove_comment_tags(s)),
             ast::meta_list(ref s, ref l) => List(s.to_owned(), l.iter()
                                          .transform(|x| x.node.clean()).collect()),
-            ast::meta_name_value(s, ref v) => NameValue(s.to_owned(), lit_to_str(v))
+            ast::meta_name_value(s, ref v) => NameValue(remove_comment_tags(s),
+                                         remove_comment_tags(lit_to_str(v)))
         }
     }
 }
@@ -267,7 +293,7 @@ impl Clean<StructField> for doctree::StructField {
         StructField {
             name: if self.name.is_some() { its(&self.name.unwrap()).to_owned() } else { ~"" },
             type_: self.type_.clean(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             visibility: self.visibility
         }
     }
@@ -364,7 +390,7 @@ impl Clean<Enum> for doctree::Enum {
         Enum {
             variants: self.variants.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             name: its(&self.name).to_owned(),
             where: self.where.clean(),
             node: self.id
@@ -376,7 +402,7 @@ impl Clean<Variant> for doctree::Variant {
     pub fn clean(&self) -> Variant {
         Variant {
             name: its(&self.name).to_owned(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             kind: self.kind.clean(),
             visibility: self.visibility
         }
@@ -404,7 +430,7 @@ impl Clean<Function> for doctree::Function {
             decl: self.decl.clean(),
             name: its(&self.name).to_owned(),
             id: self.id,
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             where: self.where.clean(),
             visibility: self.visibility,
             generics: self.generics.clean(),
