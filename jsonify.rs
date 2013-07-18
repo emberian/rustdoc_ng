@@ -4,6 +4,16 @@ use extra::json::{ToJson, Json, Object, String, Boolean};
 use syntax::ast;
 use clean;
 
+impl ToJson for clean::Crate {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"structs", self.structs.to_json());
+        o.insert(~"enums", self.enums.to_json());
+        o.insert(~"fns", self.fns.to_json());
+        Object(o)
+    }
+}
+
 impl ToJson for clean::Attribute {
     pub fn to_json(&self) -> Json {
         match *self {
@@ -55,8 +65,8 @@ impl ToJson for clean::StructField {
 
 impl ToJson for clean::Type {
     pub fn to_json(&self) -> Json {
-        use super::clean::*;
         use extra;
+        use super::clean::*;
         let mut o = ~HashMap::new();
         let (n, v) = match self {
             &Unresolved(_) => fail!("no unresolved types should survive to jsonification"),
@@ -70,11 +80,11 @@ impl ToJson for clean::Type {
                              ),
             &Unique(ref t) => (~"unique", t.to_json()),
             &Managed(ref t) => (~"managed", t.to_json()),
-                             &Tuple(ref t) => (~"tuple", t.to_json()),
-                             &Vector(ref t) => (~"vector", t.to_json()),
-                             &String => (~"string", extra::json::String(~"")),
-                             &Bool => (~"bool", extra::json::String(~"")),
-                             &Unit => (~"unit", extra::json::String(~"")),
+            &Tuple(ref t) => (~"tuple", t.to_json()),
+            &Vector(ref t) => (~"vector", t.to_json()),
+            &String => (~"string", extra::json::String(~"")),
+            &Bool => (~"primitive", extra::json::String(~"bool")),
+            &Unit => (~"unit", extra::json::String(~"")),
         };
         o.insert(~"type", extra::json::String(n));
         if v != extra::json::String(~"") {
@@ -154,7 +164,6 @@ impl ToJson for clean::Variant {
         let mut o = ~HashMap::new();
         o.insert(~"name", String(self.name.clone()));
         o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"id", String(self.id.to_str()));
         o.insert(~"visibility", String(match self.visibility {
             ast::public => ~"public",
             ast::private => ~"private",

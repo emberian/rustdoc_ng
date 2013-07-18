@@ -3,8 +3,9 @@ use its = syntax::parse::token::ident_to_str;
 use syntax;
 use syntax::ast;
 
-use super::doctree;
-use std::local_data::*;
+use doctree;
+use visit;
+use std::local_data;
 
 pub enum Attribute {
     Word(~str),
@@ -171,13 +172,27 @@ pub struct Variant {
     name: ~str,
     attrs: ~[Attribute],
     //kind: ast::variant_kind,
-    id: ast::node_id,
     visibility: Visibility
 }
 
+pub struct Crate {
+    structs: ~[Struct],
+    enums: ~[Enum],
+    fns: ~[Function]
+}
 
 pub trait Clean<T> {
     pub fn clean(&self) -> T;
+}
+
+impl Clean<Crate> for visit::RustdocVisitor {
+    pub fn clean(&self) -> Crate {
+        Crate {
+            structs: self.structs.iter().transform(|x| x.clean()).collect(),
+            enums: self.enums.iter().transform(|x| x.clean()).collect(),
+            fns: self.fns.iter().transform(|x| x.clean()).collect()
+        }
+    }
 }
 
 impl Clean<Struct> for doctree::Struct {
@@ -276,12 +291,12 @@ fn resolve_type(t: &Type) -> Type {
         _ => return (*t).clone()
     };
 
-    let dm = unsafe { local_data_get(super::ctxtkey).unwrap() }.cmap.def_map;
+    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).cmap.def_map;
     debug!("searching for %? in defmap", id);
     let d = match dm.find(&id) {
         Some(k) => k,
         None => {
-            let ctxt = unsafe { local_data_get(super::ctxtkey).unwrap() };
+            let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
                    syntax::ast_map::node_id_to_str(ctxt.amap, id, ctxt.sess.intr()));
             fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
@@ -313,7 +328,7 @@ impl Clean<Type> for ast::Ty {
     pub fn clean(&self) -> Type {
         use syntax::ast::*;
         debug!("cleaning type `%?`", self);
-        let codemap = unsafe { local_data_get(super::ctxtkey).unwrap() }.sess.codemap;
+        let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let mut t = match self.node {
             ty_nil => Unit,
@@ -347,7 +362,6 @@ impl Clean<Variant> for doctree::Variant {
             name: its(&self.name).to_owned(),
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             //kind: self.kind,
-            id: self.id,
             visibility: self.visibility
         }
     }

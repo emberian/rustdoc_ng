@@ -19,19 +19,20 @@ use syntax::ast;
 use syntax::ast_map;
 
 use std::os;
+use std::local_data;
 use extra::json::ToJson;
 
-use visit::*;
-use syntax::visit_new::Visitor;
+use syntax::visit::Visitor;
 
+use visit::RustdocVisitor;
 use clean::Clean;
 
 pub mod doctree;
 pub mod clean;
-mod jsonify;
-mod visit;
+pub mod jsonify;
+pub mod visit;
 
-pub fn ctxtkey(d: @DocContext) {}
+pub static ctxtkey: local_data::Key<DocContext> = &local_data::Key;
 
 struct DocContext {
     crate: @ast::crate,
@@ -87,6 +88,8 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
 
 fn main() {
     use extra::getopts::*;
+    use std::hashmap::HashMap;
+
     let args = os::args();
     let opts = ~[
         optmulti("L")
@@ -94,7 +97,7 @@ fn main() {
     let matches = getopts(args.tail(), opts).get();
     let libs = opt_strs(&matches, "L").map(|s| Path(*s));
 
-    let ctxt = @get_ast_and_resolve(&Path(matches.free[0]), libs);
+    let ctxt = get_ast_and_resolve(&Path(matches.free[0]), libs);
     debug!("defmap:");
     for ctxt.cmap.def_map.iter().advance |(k, v)| {
         debug!("%?: %?", k, v);
@@ -137,4 +140,17 @@ fn main() {
     for crate_fns.iter().transform(|x| x.to_json()).advance |j| {
         println(j.to_str());
     }
+    local_data::set(ctxtkey, ctxt);
+
+    let mut v = RustdocVisitor::new();
+    v.visit_crate(ctxt.crate);
+    let mut crate = v.clean();
+
+    for crate.fns.mut_iter().advance |x| {
+        x.attrs = match ctxt.amap.get(&x.id) {
+            &ast_map::node_item(item, _path) => item.attrs.iter().transform(|x| x.clean()).collect(),
+            _ => fail!("function mapped to non-item")
+        }
+    }
+    println(crate.to_json().to_str());
 }

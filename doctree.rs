@@ -55,5 +55,6 @@ pub struct Variant {
 pub struct Function {
     decl: ast::fn_decl,
     body: ast::blk,
+    attrs: ~[ast::attribute],
     id: node_id
 }
