@@ -1,5 +1,5 @@
-mod basic_enum;
-mod basic_struct;
+mod enum_;
+mod struct_;
 #[path="extern.rs"]
 mod ext;
 

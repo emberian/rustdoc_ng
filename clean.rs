@@ -15,6 +15,7 @@ pub enum Attribute {
 
 pub struct TyParam {
     name: ~str,
+    node: ast::node_id,
     bounds: ~[TyParamBound]
 }
 
@@ -64,6 +65,10 @@ pub enum TraitMethod {
 
 pub struct Function {
     decl: FnDecl,
+    name: ~str,
+    visibility: Visibility,
+    where: ~str,
+    generics: Generics,
     //body: Block,
     id: ast::node_id,
     attrs: ~[Attribute]
@@ -109,12 +114,19 @@ impl Trait {
 /// A representation of a Type suitable for hyperlinking purposes. Ideally one can get the original
 /// type out of the AST/ty::ctxt given one of these, if more information is needed. Most importantly
 /// it does not preserve mutability or boxes.
+#[deriving(Clone)]
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
     Unresolved(ast::node_id),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
     Resolved(ast::node_id),
+    /// For parameterized types, so the consumer of the JSON don't go looking
+    /// for types which don't exist anywhere.
+    Generic(ast::node_id),
+    /// For references to self
+    Self(ast::node_id),
+    /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
     Tuple(~[Type]),
     Vector(~Type),
@@ -127,58 +139,59 @@ pub enum Type {
     // region, raw, other boxes, mutable
 }
 
-impl Clone for Type {
-    pub fn clone(&self) -> Type {
-        match *self {
-            Unresolved(ref __self_0) => Unresolved(__self_0.clone()),
-            Resolved(ref __self_0) => Resolved(__self_0.clone()),
-            Primitive(ref __self_0) => Primitive(*__self_0.clone()),
-            Tuple(ref __self_0) => Tuple(__self_0.clone()),
-            Vector(ref __self_0) => Vector(__self_0.clone()),
-            String => String,
-            Bool => Bool,
-            Unit => Unit,
-            Unique(ref __self_0) => Unique(__self_0.clone()),
-            Managed(ref __self_0) => Managed(__self_0.clone())
-        }
-    }
-}
-
 pub struct StructField {
     name: ~str,
     type_: Type,
     attrs: ~[Attribute],
-    visibility: Option<Visibility>
+    visibility: Option<Visibility>,
 }
 
 pub type Visibility = ast::visibility;
 
 pub struct Struct {
     name: ~str,
+    where: ~str,
     node: ast::node_id,
     struct_type: doctree::StructType,
     attrs: ~[Attribute],
     generics: Generics,
-    fields: ~[StructField]
+    fields: ~[StructField],
+}
+
+/// This is a more limited form of the standard Struct, different in that it
+/// it lacks the things most items have (name, id, parameterization). Found
+/// only as a variant in an enum.
+pub struct VariantStruct {
+    struct_type: doctree::StructType,
+    fields: ~[StructField],
 }
 
 pub struct Enum {
     variants: ~[Variant],
     generics: Generics,
-    attrs: ~[Attribute]
+    attrs: ~[Attribute],
+    name: ~str,
+    node: ast::node_id,
+    where: ~str,
 }
 
 pub struct Variant {
     name: ~str,
     attrs: ~[Attribute],
-    //kind: ast::variant_kind,
-    visibility: Visibility
+    kind: VariantKind,
+    visibility: Visibility,
+}
+
+pub enum VariantKind {
+    CLikeVariant,
+    TupleVariant(~[Type]),
+    StructVariant(VariantStruct),
 }
 
 pub struct Crate {
     structs: ~[Struct],
     enums: ~[Enum],
-    fns: ~[Function]
+    fns: ~[Function],
 }
 
 pub trait Clean<T> {
@@ -199,11 +212,12 @@ impl Clean<Struct> for doctree::Struct {
     pub fn clean(&self) -> Struct {
         Struct {
             name: its(&self.name).to_owned(),
-            node: self.node,
+            node: self.id,
             struct_type: self.struct_type,
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
-            fields: self.fields.iter().transform(|x| x.clean()).collect()
+            fields: self.fields.iter().transform(|x| x.clean()).collect(),
+            where: self.where.clean(),
         }
     }
 }
@@ -269,7 +283,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     pub fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
-            ast::TraitTyParamBound(_t) => TraitBound(Trait::new())
+            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
         }
     }
 }
@@ -278,11 +292,13 @@ impl Clean<TyParam> for ast::TyParam {
     pub fn clean(&self) -> TyParam {
         TyParam {
             name: its(&self.ident).to_owned(),
+            node: self.id,
             bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
     }
 }
 
+/// Given a Type, resolve it using the def_map
 fn resolve_type(t: &Type) -> Type {
     use syntax::ast::*;
 
@@ -291,22 +307,21 @@ fn resolve_type(t: &Type) -> Type {
         _ => return (*t).clone()
     };
 
-    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).cmap.def_map;
+    let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.def_map;
     debug!("searching for %? in defmap", id);
     let d = match dm.find(&id) {
         Some(k) => k,
         None => {
             let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
-                   syntax::ast_map::node_id_to_str(ctxt.amap, id, ctxt.sess.intr()));
+                   syntax::ast_map::node_id_to_str(ctxt.tycx.items, id, ctxt.sess.intr()));
             fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
         }
     };
 
     Resolved(match *d {
         def_fn(i, _) => i.node,
-        def_self(i, _) => i,
-        def_self_ty(i) => i,
+        def_self(i, _) | def_self_ty(i) => return Self(i),
         def_ty(i) => i.node,
         def_trait(i) => {
             debug!("saw def_trait in def_to_id");
@@ -317,7 +332,7 @@ fn resolve_type(t: &Type) -> Type {
             ty_bool => return Bool,
             _ => return Primitive(p)
         },
-        def_ty_param(i, _) => i.node,
+        def_ty_param(i, _) => return Generic(i.node),
         def_struct(i) => i.node,
         def_typaram_binder(i) => i,
         _ => fail!("resolved type maps to a weird def"),
@@ -332,15 +347,13 @@ impl Clean<Type> for ast::Ty {
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let mut t = match self.node {
             ty_nil => Unit,
-            ty_ptr(m) | ty_rptr(_, m) => resolve_type(&m.ty.clean()),
-            ty_box(m) => Managed(~resolve_type(&m.ty.clean())),
-            ty_uniq(m) => Unique(~resolve_type(&m.ty.clean())),
-            ty_vec(m) | ty_fixed_length_vec(m, _) =>
-                Vector(~resolve_type(&m.ty.clean())),
-            ty_tup(ref tys) => Tuple(tys.iter().transform(|x|
-                                                          resolve_type(&x.clean())).collect()),
+            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
+            ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
+            ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
+            ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
+            ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
-            _ => fail!("Unimplemented type (this is a bug"),
+            _ => fail!("Unimplemented type (this is a bug)"),
         };
         resolve_type(&t)
     }
@@ -351,7 +364,10 @@ impl Clean<Enum> for doctree::Enum {
         Enum {
             variants: self.variants.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect()
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            name: its(&self.name).to_owned(),
+            where: self.where.clean(),
+            node: self.id
         }
     }
 }
@@ -361,8 +377,23 @@ impl Clean<Variant> for doctree::Variant {
         Variant {
             name: its(&self.name).to_owned(),
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
-            //kind: self.kind,
+            kind: self.kind.clean(),
             visibility: self.visibility
+        }
+    }
+}
+
+impl Clean<VariantKind> for ast::variant_kind {
+    pub fn clean(&self) -> VariantKind {
+        match self {
+            &ast::tuple_variant_kind(ref args) => {
+                if args.len() == 0 {
+                    CLikeVariant
+                } else {
+                    TupleVariant(args.iter().transform(|x| x.ty.clean()).collect())
+                }
+            },
+            &ast::struct_variant_kind(ref sd) => StructVariant(sd.clean()),
         }
     }
 }
@@ -371,9 +402,30 @@ impl Clean<Function> for doctree::Function {
     pub fn clean(&self) -> Function {
         Function {
             decl: self.decl.clean(),
+            name: its(&self.name).to_owned(),
             id: self.id,
-            attrs: ~[]
+            attrs: self.attrs.clean(),
+            where: self.where.clean(),
+            visibility: self.visibility,
+            generics: self.generics.clean(),
         }
+    }
+}
+
+impl Clean<VariantStruct> for syntax::ast::struct_def {
+    pub fn clean(&self) -> VariantStruct {
+        VariantStruct {
+            struct_type: doctree::struct_type_from_def(self),
+            fields: self.fields.iter().transform(
+                                       |x| doctree::StructField::new(&x.node).clean()).collect()
+        }
+    }
+}
+
+impl Clean<~str> for syntax::codemap::span {
+    pub fn clean(&self) -> ~str {
+        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
+        cm.span_to_str(*self)
     }
 }
 
@@ -404,5 +456,11 @@ impl Clean<RetStyle> for ast::ret_style {
             ast::return_val => Return,
             ast::noreturn => NoReturn
         }
+    }
+}
+
+impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
+    pub fn clean(&self) -> ~[U] {
+        self.iter().transform(|x| x.clean()).collect()
     }
 }

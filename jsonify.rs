@@ -2,11 +2,14 @@ use std::hashmap::HashMap;
 use extra::json::{ToJson, Json, Object, String, Boolean};
 
 use syntax::ast;
+
+use doctree;
 use clean;
 
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
+        o.insert(~"schema", String(~"0.1.0"));
         o.insert(~"structs", self.structs.to_json());
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"fns", self.fns.to_json());
@@ -35,13 +38,20 @@ impl ToJson for clean::Attribute {
 impl ToJson for clean::Struct {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"id", String(self.node.to_str()));
+        o.insert(~"id", self.node.to_json());
         o.insert(~"name", String(self.name.clone()));
-        o.insert(~"type", String(self.struct_type.to_str()));
+        o.insert(~"type", self.struct_type.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"fields", self.fields.to_json());
         o.insert(~"generics", self.generics.to_json());
+        o.insert(~"source", self.where.to_json());
         Object(o)
+    }
+}
+
+impl ToJson for doctree::StructType {
+    pub fn to_json(&self) -> Json {
+        String(self.to_str())
     }
 }
 
@@ -70,7 +80,9 @@ impl ToJson for clean::Type {
         let mut o = ~HashMap::new();
         let (n, v) = match self {
             &Unresolved(_) => fail!("no unresolved types should survive to jsonification"),
-            &Resolved(n) => (~"resolved", extra::json::String(n.to_str())),
+            &Resolved(n) => (~"resolved", n.to_json()),
+            &Generic(n) => (~"generic", n.to_json()),
+            &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
                               ast::ty_int(_) => extra::json::String(~"int"),
                               ast::ty_uint(_) => extra::json::String(~"uint"),
@@ -103,8 +115,9 @@ impl ToJson for clean::Lifetime {
 impl ToJson for clean::TyParam {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"name", String(copy self.name));
+        o.insert(~"name", self.name.to_json());
         o.insert(~"bounds", self.bounds.to_json());
+        o.insert(~"id", self.node.to_json());
         Object(o)
     }
 }
@@ -126,7 +139,7 @@ impl ToJson for clean::TyParamBound {
 impl ToJson for clean::Trait {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"name", String(copy self.name));
+        o.insert(~"name", self.name.to_json());
         o.insert(~"methods", self.methods.to_json());
         o.insert(~"lifetimes", self.lifetimes.to_json());
         o.insert(~"generics", self.generics.to_json());
@@ -155,6 +168,9 @@ impl ToJson for clean::Enum {
         o.insert(~"variants", self.variants.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"id", self.node.to_json());
+        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -169,6 +185,34 @@ impl ToJson for clean::Variant {
             ast::private => ~"private",
             ast::inherited => ~"inherited"
         }));
+        o.insert(~"kind", self.kind.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::VariantStruct {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"type", self.struct_type.to_json());
+        o.insert(~"fields", self.fields.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::VariantKind {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        match self {
+            &clean::CLikeVariant => { o.insert(~"type", String(~"c-like")); },
+            &clean::TupleVariant(ref args) => {
+                o.insert(~"type", String(~"tuple"));
+                o.insert(~"members", args.to_json());
+            },
+            &clean::StructVariant(ref struct_) => {
+                o.insert(~"type", String(~"struct"));
+                o.insert(~"members", struct_.to_json());
+            }
+        }
         Object(o)
     }
 }
@@ -176,9 +220,12 @@ impl ToJson for clean::Variant {
 impl ToJson for clean::Function {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"id", self.id.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"decl", self.decl.to_json());
+        o.insert(~"source", self.where.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        o.insert(~"name", self.name.to_json());
         Object(o)
     }
 }
@@ -198,7 +245,7 @@ impl ToJson for clean::Argument {
         let mut o = ~HashMap::new();
         o.insert(~"mutable", Boolean(self.mutable));
         o.insert(~"type", self.ty.to_json());
-        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"id", self.id.to_json());
         Object(o)
     }
 }
