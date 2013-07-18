@@ -15,6 +15,7 @@ pub enum Attribute {
 
 pub struct TyParam {
     name: ~str,
+    node: ast::node_id,
     bounds: ~[TyParamBound]
 }
 
@@ -119,6 +120,12 @@ pub enum Type {
     Unresolved(ast::node_id),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
     Resolved(ast::node_id),
+    /// For parameterized types, so the consumer of the JSON don't go looking
+    /// for types which don't exist anywhere.
+    Generic(ast::node_id),
+    /// For references to self
+    Self(ast::node_id),
+    /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
     Tuple(~[Type]),
     Vector(~Type),
@@ -136,6 +143,8 @@ impl Clone for Type {
         match *self {
             Unresolved(ref __self_0) => Unresolved(__self_0.clone()),
             Resolved(ref __self_0) => Resolved(__self_0.clone()),
+            Generic(ref __self_0) => Generic(__self_0.clone()),
+            Self(ref __self_0) => Self(__self_0.clone()),
             Primitive(ref __self_0) => Primitive(*__self_0.clone()),
             Tuple(ref __self_0) => Tuple(__self_0.clone()),
             Vector(ref __self_0) => Vector(__self_0.clone()),
@@ -301,6 +310,7 @@ impl Clean<TyParam> for ast::TyParam {
     pub fn clean(&self) -> TyParam {
         TyParam {
             name: its(&self.ident).to_owned(),
+            node: self.id,
             bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
     }
@@ -328,8 +338,7 @@ fn resolve_type(t: &Type) -> Type {
 
     Resolved(match *d {
         def_fn(i, _) => i.node,
-        def_self(i, _) => i,
-        def_self_ty(i) => i,
+        def_self(i, _) | def_self_ty(i) => return Self(i),
         def_ty(i) => i.node,
         def_trait(i) => {
             debug!("saw def_trait in def_to_id");
@@ -340,7 +349,7 @@ fn resolve_type(t: &Type) -> Type {
             ty_bool => return Bool,
             _ => return Primitive(p)
         },
-        def_ty_param(i, _) => i.node,
+        def_ty_param(i, _) => return Generic(i.node),
         def_struct(i) => i.node,
         def_typaram_binder(i) => i,
         _ => fail!("resolved type maps to a weird def"),
@@ -361,7 +370,7 @@ impl Clean<Type> for ast::Ty {
             ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
-            _ => fail!("Unimplemented type (this is a bug"),
+            _ => fail!("Unimplemented type (this is a bug)"),
         };
         resolve_type(&t)
     }

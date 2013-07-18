@@ -38,7 +38,7 @@ impl ToJson for clean::Attribute {
 impl ToJson for clean::Struct {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"id", String(self.node.to_str()));
+        o.insert(~"id", self.node.to_json());
         o.insert(~"name", String(self.name.clone()));
         o.insert(~"type", self.struct_type.to_json());
         o.insert(~"attrs", self.attrs.to_json());
@@ -80,7 +80,9 @@ impl ToJson for clean::Type {
         let mut o = ~HashMap::new();
         let (n, v) = match self {
             &Unresolved(_) => fail!("no unresolved types should survive to jsonification"),
-            &Resolved(n) => (~"resolved", extra::json::String(n.to_str())),
+            &Resolved(n) => (~"resolved", n.to_json()),
+            &Generic(n) => (~"generic", n.to_json()),
+            &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
                               ast::ty_int(_) => extra::json::String(~"int"),
                               ast::ty_uint(_) => extra::json::String(~"uint"),
@@ -115,6 +117,7 @@ impl ToJson for clean::TyParam {
         let mut o = ~HashMap::new();
         o.insert(~"name", String(copy self.name));
         o.insert(~"bounds", self.bounds.to_json());
+        o.insert(~"id", self.node.to_json());
         Object(o)
     }
 }
@@ -217,7 +220,7 @@ impl ToJson for clean::VariantKind {
 impl ToJson for clean::Function {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"id", self.id.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"decl", self.decl.to_json());
         o.insert(~"source", self.where.to_json());
@@ -242,7 +245,7 @@ impl ToJson for clean::Argument {
         let mut o = ~HashMap::new();
         o.insert(~"mutable", Boolean(self.mutable));
         o.insert(~"type", self.ty.to_json());
-        o.insert(~"id", String(self.id.to_str()));
+        o.insert(~"id", self.id.to_json());
         Object(o)
     }
 }
