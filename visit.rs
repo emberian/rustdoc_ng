@@ -36,28 +36,11 @@ impl RustdocVisitor {
         fn visit_struct_def(item: &ast::item, sd: @ast::struct_def, generics:
                             &ast::Generics, rcx: rdv) {
             debug!("Visiting struct");
-            let mut struct_type = Plain;
+            let struct_type = struct_type_from_def(sd);
             let mut fields: ~[StructField] = vec::with_capacity(sd.fields.len());
-            if sd.ctor_id.is_some() {
-                // We are in a unit/tuple struct
-                match sd.fields.len() {
-                    0 => struct_type = Unit,
-                    1 => struct_type = Newtype,
-                    _ => struct_type = Tuple
-                }
-            }
 
             for sd.fields.iter().advance |x| {
-                fields.push(StructField {
-                            id: x.node.id,
-                            type_:  copy x.node.ty,
-                            attrs:  copy x.node.attrs,
-                            name:  match x.node.kind { ast::named_field(id, _) => Some(id), _ => None },
-                            visibility: match x.node.kind {
-                                ast::named_field(_, vis) => Some(vis),
-                                _ => None
-                            },
-                            });
+                fields.push(StructField::new(&x.node));
             }
             rcx.structs.push(
                 Struct {
@@ -79,7 +62,8 @@ impl RustdocVisitor {
                 vars.push(Variant {
                     name: x.node.name,
                     attrs: copy x.node.attrs,
-                    visibility: x.node.vis
+                    visibility: x.node.vis,
+                    kind: copy x.node.kind,
                 });
             }
             rcx.enums.push(Enum {

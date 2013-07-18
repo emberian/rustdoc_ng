@@ -30,6 +30,22 @@ pub struct StructField {
     visibility: Option<ast::visibility>
 }
 
+impl StructField {
+    pub fn new(sf: &ast::struct_field_) -> StructField {
+        let (name, vis) = match sf.kind {
+            ast::named_field(id, vis) => (Some(id), Some(vis)),
+            _ => (None, None)
+        };
+        StructField {
+            id: sf.id,
+            type_: copy sf.ty,
+            attrs: copy sf.attrs,
+            name: name,
+            visibility: vis,
+        }
+    }
+}
+
 pub struct Struct {
     id: node_id,
     struct_type: StructType,
@@ -52,7 +68,7 @@ pub struct Enum {
 pub struct Variant {
     name: ident,
     attrs: ~[ast::attribute],
-    //kind: ast::variant_kind,
+    kind: ast::variant_kind,
     visibility: ast::visibility
 }
 
@@ -64,4 +80,17 @@ pub struct Function {
     visibility: ast::visibility,
     where: span,
     generics: ast::Generics,
+}
+
+pub fn struct_type_from_def(sd: &ast::struct_def) -> StructType {
+    if sd.ctor_id.is_some() {
+        // We are in a tuple-struct
+        match sd.fields.len() {
+            0 => Unit,
+            1 => Newtype,
+            _ => Tuple
+        }
+    } else {
+        Plain
+    }
 }

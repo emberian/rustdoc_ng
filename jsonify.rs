@@ -2,11 +2,14 @@ use std::hashmap::HashMap;
 use extra::json::{ToJson, Json, Object, String, Boolean};
 
 use syntax::ast;
+
+use doctree;
 use clean;
 
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
+        o.insert(~"schema", String(~"0.1.0"));
         o.insert(~"structs", self.structs.to_json());
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"fns", self.fns.to_json());
@@ -37,12 +40,18 @@ impl ToJson for clean::Struct {
         let mut o = ~HashMap::new();
         o.insert(~"id", String(self.node.to_str()));
         o.insert(~"name", String(self.name.clone()));
-        o.insert(~"type", String(self.struct_type.to_str()));
+        o.insert(~"type", self.struct_type.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"fields", self.fields.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"source", self.where.to_json());
         Object(o)
+    }
+}
+
+impl ToJson for doctree::StructType {
+    pub fn to_json(&self) -> Json {
+        String(self.to_str())
     }
 }
 
@@ -157,6 +166,7 @@ impl ToJson for clean::Enum {
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"name", self.name.to_json());
+        o.insert(~"id", self.node.to_json());
         o.insert(~"source", self.where.to_json());
         Object(o)
     }
@@ -172,6 +182,34 @@ impl ToJson for clean::Variant {
             ast::private => ~"private",
             ast::inherited => ~"inherited"
         }));
+        o.insert(~"kind", self.kind.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::VariantStruct {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"type", self.struct_type.to_json());
+        o.insert(~"fields", self.fields.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::VariantKind {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        match self {
+            &clean::CLikeVariant => { o.insert(~"type", String(~"c-like")); },
+            &clean::TupleVariant(ref args) => {
+                o.insert(~"type", String(~"tuple"));
+                o.insert(~"members", args.to_json());
+            },
+            &clean::StructVariant(ref struct_) => {
+                o.insert(~"type", String(~"struct"));
+                o.insert(~"members", struct_.to_json());
+            }
+        }
         Object(o)
     }
 }

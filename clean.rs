@@ -152,7 +152,7 @@ pub struct StructField {
     name: ~str,
     type_: Type,
     attrs: ~[Attribute],
-    visibility: Option<Visibility>
+    visibility: Option<Visibility>,
 }
 
 pub type Visibility = ast::visibility;
@@ -164,7 +164,15 @@ pub struct Struct {
     struct_type: doctree::StructType,
     attrs: ~[Attribute],
     generics: Generics,
-    fields: ~[StructField]
+    fields: ~[StructField],
+}
+
+/// This is a more limited form of the standard Struct, different in that it
+/// it lacks the things most items have (name, id, parameterization). Found
+/// only as a variant in an enum.
+pub struct VariantStruct {
+    struct_type: doctree::StructType,
+    fields: ~[StructField],
 }
 
 pub struct Enum {
@@ -179,14 +187,20 @@ pub struct Enum {
 pub struct Variant {
     name: ~str,
     attrs: ~[Attribute],
-    //kind: ast::variant_kind,
-    visibility: Visibility
+    kind: VariantKind,
+    visibility: Visibility,
+}
+
+pub enum VariantKind {
+    CLikeVariant,
+    TupleVariant(~[Type]),
+    StructVariant(VariantStruct),
 }
 
 pub struct Crate {
     structs: ~[Struct],
     enums: ~[Enum],
-    fns: ~[Function]
+    fns: ~[Function],
 }
 
 pub trait Clean<T> {
@@ -371,8 +385,23 @@ impl Clean<Variant> for doctree::Variant {
         Variant {
             name: its(&self.name).to_owned(),
             attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
-            //kind: self.kind,
+            kind: self.kind.clean(),
             visibility: self.visibility
+        }
+    }
+}
+
+impl Clean<VariantKind> for ast::variant_kind {
+    pub fn clean(&self) -> VariantKind {
+        match self {
+            &ast::tuple_variant_kind(ref args) => {
+                if args.len() == 0 {
+                    CLikeVariant
+                } else {
+                    TupleVariant(args.iter().transform(|x| x.ty.clean()).collect())
+                }
+            },
+            &ast::struct_variant_kind(ref sd) => StructVariant(sd.clean()),
         }
     }
 }
@@ -387,6 +416,16 @@ impl Clean<Function> for doctree::Function {
             where: self.where.clean(),
             visibility: self.visibility,
             generics: self.generics.clean(),
+        }
+    }
+}
+
+impl Clean<VariantStruct> for syntax::ast::struct_def {
+    pub fn clean(&self) -> VariantStruct {
+        VariantStruct {
+            struct_type: doctree::struct_type_from_def(self),
+            fields: self.fields.iter().transform(
+                                       |x| doctree::StructField::new(&x.node).clean()).collect()
         }
     }
 }
