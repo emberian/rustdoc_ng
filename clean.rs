@@ -264,6 +264,7 @@ fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
     for attrs.iter().advance |at| {
         match *at {
+            //XXX how should these be separated?
             NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", s.clone())),
             _ => ()
         }
@@ -280,7 +281,7 @@ impl Clean<Attribute> for ast::meta_item_ {
     pub fn clean(&self) -> Attribute {
         match *self {
             ast::meta_word(s) => Word(remove_comment_tags(s)),
-            ast::meta_list(ref s, ref l) => List(s.to_owned(), l.iter()
+            ast::meta_list(ref s, ref l) => List(remove_comment_tags(s), l.iter()
                                          .transform(|x| x.node.clean()).collect()),
             ast::meta_name_value(s, ref v) => NameValue(remove_comment_tags(s),
                                          remove_comment_tags(lit_to_str(v)))
