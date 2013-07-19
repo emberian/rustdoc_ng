@@ -62,7 +62,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     let (crate, tycx) = driver::driver::compile_upto(sess, sessopts.cfg.clone(),
                                                      &driver::driver::file_input(cpath.clone()),
                                                      driver::driver::cu_typeck, None);
-                                                     
+
     DocContext { crate: crate.unwrap(), tycx: tycx.unwrap(), sess: sess }
 }
 
