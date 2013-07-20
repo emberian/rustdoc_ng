@@ -4,7 +4,16 @@ workspace (I use `~/.rustpkg`, so it goes into `~/.rustpkg/src`) and run
 executable (`rustdoc_ng`) into your Rust prefix (I use `../configure
 --prefix=~/.local`, so I put it in `~/.local/bin`).
 
-**Do not use unless you plan on helping develop it!**
+**Do not use unless you plan on helping develop it!** It is incomplete and
+can't actually generate documentation yet.
+
+The basic structure is that `visit` extracts relevant data from the Rust AST
+as given by libsyntax. `clean` then takes this simplified AST and stringifies
+it and resolves types and such. From there, pluggable "filters" can be run
+over this clean AST to remove or modify nodes, as well as augment the data
+included.  As the last step, the cleaned AST is jsonified and returned.
+Plugins can return a name and `@ToJson` trait object, and their information
+will be included in the JSON output under the given name.
 
 Copyright 2013 Corey Richardson
 
