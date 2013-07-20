@@ -13,6 +13,8 @@ impl ToJson for clean::Crate {
         o.insert(~"structs", self.structs.to_json());
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"fns", self.fns.to_json());
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }
 }
