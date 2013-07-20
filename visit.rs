@@ -15,7 +15,8 @@ use std::local_data;
 pub struct RustdocVisitor {
     structs: ~[Struct],
     enums: ~[Enum],
-    fns: ~[Function]
+    fns: ~[Function],
+    attrs: ~[ast::attribute],
 }
 
 impl RustdocVisitor {
@@ -23,7 +24,8 @@ impl RustdocVisitor {
         RustdocVisitor {
             structs: ~[],
             enums: ~[],
-            fns: ~[]
+            fns: ~[],
+            attrs: ~[],
         }
     }
 }
@@ -33,6 +35,7 @@ type vst = visit::vt<rdv>;
 
 impl RustdocVisitor {
     pub fn visit(@mut self, crate: &ast::crate) {
+        self.attrs = crate.node.attrs.clone();
         fn visit_struct_def(item: &ast::item, sd: @ast::struct_def, generics:
                             &ast::Generics, rcx: rdv) {
             debug!("Visiting struct");

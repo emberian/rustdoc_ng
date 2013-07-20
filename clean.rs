@@ -18,6 +18,8 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
 }
 
 pub struct Crate {
+    name: ~str,
+    attrs: ~[Attribute],
     structs: ~[Struct],
     enums: ~[Enum],
     fns: ~[Function],
@@ -25,10 +27,14 @@ pub struct Crate {
 
 impl Clean<Crate> for visit::RustdocVisitor {
     pub fn clean(&self) -> Crate {
+        use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
         Crate {
             structs: self.structs.iter().transform(|x| x.clean()).collect(),
             enums: self.enums.iter().transform(|x| x.clean()).collect(),
             fns: self.fns.iter().transform(|x| x.clean()).collect(),
+            name: last_meta_item_value_str_by_name(find_linkage_metas(self.attrs),
+                                                   "name").unwrap().to_owned(),
+            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
         }
     }
 }
