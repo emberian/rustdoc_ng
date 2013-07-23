@@ -20,21 +20,44 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    structs: ~[Struct],
-    enums: ~[Enum],
-    fns: ~[Function],
+    mods: ~[Module],
 }
 
 impl Clean<Crate> for visit::RustdocVisitor {
     pub fn clean(&self) -> Crate {
         use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
         Crate {
-            structs: self.structs.iter().transform(|x| x.clean()).collect(),
-            enums: self.enums.iter().transform(|x| x.clean()).collect(),
-            fns: self.fns.iter().transform(|x| x.clean()).collect(),
             name: last_meta_item_value_str_by_name(find_linkage_metas(self.attrs),
                                                    "name").unwrap().to_owned(),
-            attrs: self.attrs.iter().transform(|x| x.clean()).collect(),
+            mods: self.mods.clean(),
+            attrs: self.attrs.clean(),
+        }
+    }
+}
+
+pub struct Module {
+    name: ~str,
+    attrs: ~[Attribute],
+    structs: ~[Struct],
+    enums: ~[Enum],
+    fns: ~[Function],
+    mods: ~[Module],
+}
+
+impl Clean<Module> for doctree::Module {
+    pub fn clean(&self) -> Module {
+        let name = if self.name.is_some() {
+            its(&self.name.unwrap()).to_owned()
+        } else {
+            ~""
+        };
+        Module {
+            name: name,
+            attrs: self.attrs.clean(),
+            structs: self.structs.clean(),
+            enums: self.enums.clean(),
+            fns: self.fns.clean(),
+            mods: self.mods.clean(),
         }
     }
 }
@@ -46,19 +69,19 @@ pub enum Attribute {
     NameValue(~str, ~str)
 }
 
-impl Clean<Attribute> for ast::meta_item_ {
+impl Clean<Attribute> for ast::MetaItem_ {
     pub fn clean(&self) -> Attribute {
         match *self {
-            ast::meta_word(s) => Word(remove_comment_tags(s)),
-            ast::meta_list(ref s, ref l) => List(remove_comment_tags(*s), l.iter()
+            ast::MetaWord(s) => Word(remove_comment_tags(s)),
+            ast::MetaList(ref s, ref l) => List(remove_comment_tags(*s), l.iter()
                                          .transform(|x| x.node.clean()).collect()),
-            ast::meta_name_value(s, ref v) => NameValue(remove_comment_tags(s),
+            ast::MetaNameValue(s, ref v) => NameValue(remove_comment_tags(s),
                                          remove_comment_tags(lit_to_str(v)))
         }
     }
 }
 
-impl Clean<Attribute> for ast::attribute {
+impl Clean<Attribute> for ast::Attribute {
     pub fn clean(&self) -> Attribute {
         self.node.value.node.clean()
     }

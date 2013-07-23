@@ -9,11 +9,22 @@ use clean;
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~HashMap::new();
-        o.insert(~"schema", String(~"0.1.0"));
-        o.insert(~"structs", self.structs.to_json());
-        o.insert(~"enums", self.enums.to_json());
-        o.insert(~"fns", self.fns.to_json());
+        o.insert(~"schema", String(~"0.2.0"));
         o.insert(~"name", self.name.to_json());
+        o.insert(~"mods", self.mods.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Module {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~HashMap::new();
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"mods", self.mods.to_json());
+        o.insert(~"structs", self.structs.to_json());
+        o.insert(~"fns", self.fns.to_json());
+        o.insert(~"enums", self.enums.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }

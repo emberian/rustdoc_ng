@@ -35,7 +35,7 @@ pub mod visit;
 pub static ctxtkey: local_data::Key<@DocContext> = &local_data::Key;
 
 struct DocContext {
-    crate: @ast::crate,
+    crate: @ast::Crate,
     tycx: middle::ty::ctxt,
     sess: driver::session::Session
 }

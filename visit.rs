@@ -4,27 +4,22 @@ use std::vec;
 
 use syntax;
 use syntax::abi::AbiSet;
-use syntax::visit;
+use syntax::{visit, ast, ast_map};
 use syntax::visit::{Visitor, fn_kind};
-use syntax::ast;
 use syntax::codemap::span;
 
 use doctree::*;
 use std::local_data;
 
 pub struct RustdocVisitor {
-    structs: ~[Struct],
-    enums: ~[Enum],
-    fns: ~[Function],
-    attrs: ~[ast::attribute],
+    mods: ~[Module],
+    attrs: ~[ast::Attribute],
 }
 
 impl RustdocVisitor {
     pub fn new() -> RustdocVisitor {
         RustdocVisitor {
-            structs: ~[],
-            enums: ~[],
-            fns: ~[],
+            mods: ~[],
             attrs: ~[],
         }
     }
@@ -34,10 +29,10 @@ type rdv = @mut RustdocVisitor;
 type vst = visit::vt<rdv>;
 
 impl RustdocVisitor {
-    pub fn visit(@mut self, crate: &ast::crate) {
-        self.attrs = crate.node.attrs.clone();
+    pub fn visit(@mut self, crate: &ast::Crate) {
+        self.attrs = crate.attrs.clone();
         fn visit_struct_def(item: &ast::item, sd: @ast::struct_def, generics:
-                            &ast::Generics, rcx: rdv) {
+                            &ast::Generics) -> Struct {
             debug!("Visiting struct");
             let struct_type = struct_type_from_def(sd);
             let mut fields: ~[StructField] = vec::with_capacity(sd.fields.len());
@@ -45,20 +40,19 @@ impl RustdocVisitor {
             for sd.fields.iter().advance |x| {
                 fields.push(StructField::new(&x.node));
             }
-            rcx.structs.push(
-                Struct {
-                    id: item.id,
-                    struct_type: struct_type,
-                    name: item.ident,
-                    attrs: item.attrs.clone(),
-                    generics: generics.clone(),
-                    fields: fields,
-                    where: item.span
-                }
-            );
+
+            Struct {
+                id: item.id,
+                struct_type: struct_type,
+                name: item.ident,
+                attrs: item.attrs.clone(),
+                generics: generics.clone(),
+                fields: fields,
+                where: item.span
+            }
         }
 
-        fn visit_enum_def(it: &ast::item, def: &ast::enum_def, params: &ast::Generics, rcx: rdv) {
+        fn visit_enum_def(it: &ast::item, def: &ast::enum_def, params: &ast::Generics) -> Enum {
             debug!("Visiting enum");
             let mut vars: ~[Variant] = ~[];
             for def.variants.iter().advance |x| {
@@ -69,20 +63,20 @@ impl RustdocVisitor {
                     kind: x.node.kind.clone(),
                 });
             }
-            rcx.enums.push(Enum {
+            Enum {
                 name: it.ident,
                 variants: vars,
                 generics: params.clone(),
                 attrs: it.attrs.clone(),
                 id: it.id,
                 where: it.span,
-            });
+            }
         }
 
         fn visit_fn(item: &ast::item, fd: &ast::fn_decl, purity: &ast::purity,
-                     abi: &AbiSet, gen: &ast::Generics, rcx: rdv) {
+                     abi: &AbiSet, gen: &ast::Generics) -> Function {
             debug!("Visiting fn");
-            rcx.fns.push(Function {
+            Function {
                 id: item.id,
                 attrs: item.attrs.clone(),
                 decl: fd.clone(),
@@ -90,25 +84,46 @@ impl RustdocVisitor {
                 visibility: item.vis,
                 where: item.span,
                 generics: gen.clone(),
-            });
+            }
         }
 
-        fn visit_item(item: @ast::item, (rcx, vt): (rdv, vst)) {
+        // Only run on the toplevel mod(s)
+        fn visit_mod(m: &ast::_mod, span: span, id: ast::node_id, (rcx, vt): (rdv, vst)) {
+            rcx.mods.push(visit_mod_contents(m, span, id));
+        }
+
+        fn visit_mod_contents(m: &ast::_mod, span: span, id: ast::node_id) -> Module {
+            let am = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.items;
+            let name = match am.find(&id) {
+                Some(m) => match m {
+                    &ast_map::node_item(ref it, _) => Some(it.ident),
+                    _ => fail!("mod id mapped to non-item in the ast map")
+                },
+                None => None
+            };
+            let mut om = Module::new(name);
+            for m.items.iter().advance |i| {
+                visit_item(*i, &mut om);
+            }
+            om
+        }
+
+        fn visit_item(item: &ast::item, om: &mut Module) {
             debug!("Visiting item %?", item);
             match item.node {
                 ast::item_mod(ref m) => {
-                    for m.items.iter().advance |i| { (vt.visit_item)(*i, (rcx.clone(), vt)); }
+                    om.mods.push(visit_mod_contents(m, item.span, item.id));
                 },
-                ast::item_enum(ref ed, ref gen) => visit_enum_def(item, ed, gen, rcx),
-                ast::item_struct(sd, ref gen) => visit_struct_def(item, sd, gen, rcx),
+                ast::item_enum(ref ed, ref gen) => om.enums.push(visit_enum_def(item, ed, gen)),
+                ast::item_struct(sd, ref gen) => om.structs.push(visit_struct_def(item, sd, gen)),
                 ast::item_fn(ref fd, ref pur, ref abi, ref gen, _) =>
-                    visit_fn(item, fd, pur, abi, gen, rcx),
+                    om.fns.push(visit_fn(item, fd, pur, abi, gen)),
                 _ => (),
             }
         }
 
         let visitor = Visitor {
-            visit_item: visit_item,
+            visit_mod: visit_mod,
             .. *visit::default_visitor::<@mut RustdocVisitor>()
         };
 
