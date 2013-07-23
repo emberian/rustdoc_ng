@@ -4,6 +4,28 @@ use syntax::codemap::span;
 use syntax::ast;
 use syntax::ast::{ident, node_id};
 
+pub struct Module {
+    name: Option<ident>,
+    attrs: ~[ast::Attribute],
+    structs: ~[Struct],
+    enums: ~[Enum],
+    fns: ~[Function],
+    mods: ~[Module]
+}
+
+impl Module {
+    pub fn new(name: Option<ident>) -> Module {
+        Module {
+            name: name,
+            attrs: ~[],
+            structs: ~[],
+            enums: ~[],
+            fns: ~[],
+            mods: ~[]
+        }
+    }
+}
+
 #[deriving(ToStr)]
 pub enum StructType {
     /// A normal struct
@@ -26,7 +48,7 @@ pub struct StructField {
     type_: ast::Ty,
     /// Name is optional for tuple structs
     name: Option<ident>,
-    attrs: ~[ast::attribute],
+    attrs: ~[ast::Attribute],
     visibility: Option<ast::visibility>
 }
 
@@ -51,7 +73,7 @@ pub struct Struct {
     struct_type: StructType,
     name: ident,
     generics: ast::Generics,
-    attrs: ~[ast::attribute],
+    attrs: ~[ast::Attribute],
     fields: ~[StructField],
     where: span,
 }
@@ -59,7 +81,7 @@ pub struct Struct {
 pub struct Enum {
     variants: ~[Variant],
     generics: ast::Generics,
-    attrs: ~[ast::attribute],
+    attrs: ~[ast::Attribute],
     id: node_id,
     where: span,
     name: ident,
@@ -67,14 +89,14 @@ pub struct Enum {
 
 pub struct Variant {
     name: ident,
-    attrs: ~[ast::attribute],
+    attrs: ~[ast::Attribute],
     kind: ast::variant_kind,
     visibility: ast::visibility
 }
 
 pub struct Function {
     decl: ast::fn_decl,
-    attrs: ~[ast::attribute],
+    attrs: ~[ast::Attribute],
     id: node_id,
     name: ident,
     visibility: ast::visibility,
