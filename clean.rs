@@ -7,11 +7,84 @@ use doctree;
 use visit;
 use std::local_data;
 
+pub trait Clean<T> {
+    pub fn clean(&self) -> T;
+}
+
+impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
+    pub fn clean(&self) -> ~[U] {
+        self.iter().transform(|x| x.clean()).collect()
+    }
+}
+
+pub struct Crate {
+    name: ~str,
+    attrs: ~[Attribute],
+    mods: ~[Module],
+}
+
+impl Clean<Crate> for visit::RustdocVisitor {
+    pub fn clean(&self) -> Crate {
+        use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
+        Crate {
+            name: last_meta_item_value_str_by_name(find_linkage_metas(self.attrs),
+                                                   "name").unwrap().to_owned(),
+            mods: self.mods.clean(),
+            attrs: self.attrs.clean(),
+        }
+    }
+}
+
+pub struct Module {
+    name: ~str,
+    attrs: ~[Attribute],
+    structs: ~[Struct],
+    enums: ~[Enum],
+    fns: ~[Function],
+    mods: ~[Module],
+}
+
+impl Clean<Module> for doctree::Module {
+    pub fn clean(&self) -> Module {
+        let name = if self.name.is_some() {
+            its(&self.name.unwrap()).to_owned()
+        } else {
+            ~""
+        };
+        Module {
+            name: name,
+            attrs: self.attrs.clean(),
+            structs: self.structs.clean(),
+            enums: self.enums.clean(),
+            fns: self.fns.clean(),
+            mods: self.mods.clean(),
+        }
+    }
+}
+
 #[deriving(Clone)]
 pub enum Attribute {
     Word(~str),
     List(~str, ~[Attribute]),
     NameValue(~str, ~str)
+}
+
+impl Clean<Attribute> for ast::MetaItem_ {
+    pub fn clean(&self) -> Attribute {
+        match *self {
+            ast::MetaWord(s) => Word(remove_comment_tags(s)),
+            ast::MetaList(ref s, ref l) => List(remove_comment_tags(*s), l.iter()
+                                         .transform(|x| x.node.clean()).collect()),
+            ast::MetaNameValue(s, ref v) => NameValue(remove_comment_tags(s),
+                                         remove_comment_tags(lit_to_str(v)))
+        }
+    }
+}
+
+impl Clean<Attribute> for ast::Attribute {
+    pub fn clean(&self) -> Attribute {
+        self.node.value.node.clean()
+    }
 }
 
 pub struct TyParam {
@@ -20,12 +93,37 @@ pub struct TyParam {
     bounds: ~[TyParamBound]
 }
 
+impl Clean<TyParam> for ast::TyParam {
+    pub fn clean(&self) -> TyParam {
+        TyParam {
+            name: its(&self.ident).to_owned(),
+            node: self.id,
+            bounds: self.bounds.iter().transform(|x| x.clean()).collect()
+        }
+    }
+}
+
 pub enum TyParamBound {
     RegionBound,
     TraitBound(Trait)
 }
 
+impl Clean<TyParamBound> for ast::TyParamBound {
+    pub fn clean(&self) -> TyParamBound {
+        match *self {
+            ast::RegionTyParamBound => RegionBound,
+            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
+        }
+    }
+}
+
 pub struct Lifetime(~str);
+
+impl Clean<Lifetime> for ast::Lifetime {
+    pub fn clean(&self) -> Lifetime {
+        Lifetime(its(&self.ident).to_owned())
+    }
+}
 
 // maybe use a Generic enum and use ~[Generic]?
 pub struct Generics {
@@ -38,6 +136,15 @@ impl Generics {
         Generics {
             lifetimes: ~[],
             type_params: ~[]
+        }
+    }
+}
+
+impl Clean<Generics> for ast::Generics {
+    pub fn clean(&self) -> Generics {
+        Generics {
+            lifetimes: self.lifetimes.iter().transform(|x| x.clean()).collect(),
+            type_params: self.ty_params.iter().transform(|x| x.clean()).collect()
         }
     }
 }
@@ -75,12 +182,39 @@ pub struct Function {
     attrs: ~[Attribute]
 }
 
+impl Clean<Function> for doctree::Function {
+    pub fn clean(&self) -> Function {
+        Function {
+            decl: self.decl.clean(),
+            name: its(&self.name).to_owned(),
+            id: self.id,
+            attrs: collapse_docs(self.attrs.clean()),
+            where: self.where.clean(),
+            visibility: self.visibility,
+            generics: self.generics.clean(),
+        }
+    }
+}
+
+
 pub struct FnDecl {
     inputs: ~[Argument],
     output: @Type,
     cf: RetStyle,
     attrs: ~[Attribute]
 }
+
+impl Clean<FnDecl> for ast::fn_decl {
+    pub fn clean(&self) -> FnDecl {
+        FnDecl {
+            inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
+            output: @(self.output.clean()),
+            cf: self.cf.clean(),
+            attrs: ~[]
+        }
+    }
+}
+
 
 pub struct Argument {
     mutable: bool,
@@ -89,9 +223,28 @@ pub struct Argument {
     id: ast::node_id
 }
 
+impl Clean<Argument> for ast::arg {
+    pub fn clean(&self) -> Argument {
+        Argument {
+            mutable: self.is_mutbl,
+            ty: @(self.ty.clean()),
+            id: self.id
+        }
+    }
+}
+
 pub enum RetStyle {
     NoReturn,
     Return
+}
+
+impl Clean<RetStyle> for ast::ret_style {
+    pub fn clean(&self) -> RetStyle {
+        match *self {
+            ast::return_val => Return,
+            ast::noreturn => NoReturn
+        }
+    }
 }
 
 pub struct Trait {
@@ -140,11 +293,42 @@ pub enum Type {
     // region, raw, other boxes, mutable
 }
 
+impl Clean<Type> for ast::Ty {
+    pub fn clean(&self) -> Type {
+        use syntax::ast::*;
+        debug!("cleaning type `%?`", self);
+        let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
+        debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
+        let mut t = match self.node {
+            ty_nil => Unit,
+            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
+            ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
+            ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
+            ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
+            ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
+            ty_path(_, _, id) => Unresolved(id),
+            _ => fail!("Unimplemented type (this is a bug)"),
+        };
+        resolve_type(&t)
+    }
+}
+
 pub struct StructField {
     name: ~str,
     type_: Type,
     attrs: ~[Attribute],
     visibility: Option<Visibility>,
+}
+
+impl Clean<StructField> for doctree::StructField {
+    pub fn clean(&self) -> StructField {
+        StructField {
+            name: if self.name.is_some() { its(&self.name.unwrap()).to_owned() } else { ~"" },
+            type_: self.type_.clean(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
+            visibility: self.visibility
+        }
+    }
 }
 
 pub type Visibility = ast::visibility;
@@ -157,56 +341,6 @@ pub struct Struct {
     attrs: ~[Attribute],
     generics: Generics,
     fields: ~[StructField],
-}
-
-/// This is a more limited form of the standard Struct, different in that it
-/// it lacks the things most items have (name, id, parameterization). Found
-/// only as a variant in an enum.
-pub struct VariantStruct {
-    struct_type: doctree::StructType,
-    fields: ~[StructField],
-}
-
-pub struct Enum {
-    variants: ~[Variant],
-    generics: Generics,
-    attrs: ~[Attribute],
-    name: ~str,
-    node: ast::node_id,
-    where: ~str,
-}
-
-pub struct Variant {
-    name: ~str,
-    attrs: ~[Attribute],
-    kind: VariantKind,
-    visibility: Visibility,
-}
-
-pub enum VariantKind {
-    CLikeVariant,
-    TupleVariant(~[Type]),
-    StructVariant(VariantStruct),
-}
-
-pub struct Crate {
-    structs: ~[Struct],
-    enums: ~[Enum],
-    fns: ~[Function],
-}
-
-pub trait Clean<T> {
-    pub fn clean(&self) -> T;
-}
-
-impl Clean<Crate> for visit::RustdocVisitor {
-    pub fn clean(&self) -> Crate {
-        Crate {
-            structs: self.structs.iter().transform(|x| x.clean()).collect(),
-            enums: self.enums.iter().transform(|x| x.clean()).collect(),
-            fns: self.fns.iter().transform(|x| x.clean()).collect()
-        }
-    }
 }
 
 impl Clean<Struct> for doctree::Struct {
@@ -223,20 +357,93 @@ impl Clean<Struct> for doctree::Struct {
     }
 }
 
-impl Clean<Generics> for ast::Generics {
-    pub fn clean(&self) -> Generics {
-        Generics {
-            lifetimes: self.lifetimes.iter().transform(|x| x.clean()).collect(),
-            type_params: self.ty_params.iter().transform(|x| x.clean()).collect()
+/// This is a more limited form of the standard Struct, different in that it
+/// it lacks the things most items have (name, id, parameterization). Found
+/// only as a variant in an enum.
+pub struct VariantStruct {
+    struct_type: doctree::StructType,
+    fields: ~[StructField],
+}
+
+impl Clean<VariantStruct> for syntax::ast::struct_def {
+    pub fn clean(&self) -> VariantStruct {
+        VariantStruct {
+            struct_type: doctree::struct_type_from_def(self),
+            fields: self.fields.iter().transform(
+                                       |x| doctree::StructField::new(&x.node).clean()).collect()
         }
     }
 }
 
-impl Clean<Attribute> for ast::attribute {
-    pub fn clean(&self) -> Attribute {
-        self.node.value.node.clean()
+pub struct Enum {
+    variants: ~[Variant],
+    generics: Generics,
+    attrs: ~[Attribute],
+    name: ~str,
+    node: ast::node_id,
+    where: ~str,
+}
+
+impl Clean<Enum> for doctree::Enum {
+    pub fn clean(&self) -> Enum {
+        Enum {
+            variants: self.variants.iter().transform(|x| x.clean()).collect(),
+            generics: self.generics.clean(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
+            name: its(&self.name).to_owned(),
+            where: self.where.clean(),
+            node: self.id
+        }
     }
 }
+
+pub struct Variant {
+    name: ~str,
+    attrs: ~[Attribute],
+    kind: VariantKind,
+    visibility: Visibility,
+}
+
+impl Clean<Variant> for doctree::Variant {
+    pub fn clean(&self) -> Variant {
+        Variant {
+            name: its(&self.name).to_owned(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
+            kind: self.kind.clean(),
+            visibility: self.visibility
+        }
+    }
+}
+
+pub enum VariantKind {
+    CLikeVariant,
+    TupleVariant(~[Type]),
+    StructVariant(VariantStruct),
+}
+
+impl Clean<VariantKind> for ast::variant_kind {
+    pub fn clean(&self) -> VariantKind {
+        match self {
+            &ast::tuple_variant_kind(ref args) => {
+                if args.len() == 0 {
+                    CLikeVariant
+                } else {
+                    TupleVariant(args.iter().transform(|x| x.ty.clean()).collect())
+                }
+            },
+            &ast::struct_variant_kind(ref sd) => StructVariant(sd.clean()),
+        }
+    }
+}
+
+impl Clean<~str> for syntax::codemap::span {
+    pub fn clean(&self) -> ~str {
+        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
+        cm.span_to_str(*self)
+    }
+}
+
+// Utility functions
 
 fn lit_to_str(lit: &ast::lit) -> ~str {
     match lit.node {
@@ -275,54 +482,6 @@ fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     }).transform(|x| x.clone()).collect::<~[Attribute]>();
     a.push(NameValue(~"doc", docstr.trim().to_owned()));
     a
-}
-
-impl Clean<Attribute> for ast::meta_item_ {
-    pub fn clean(&self) -> Attribute {
-        match *self {
-            ast::meta_word(s) => Word(remove_comment_tags(s)),
-            ast::meta_list(ref s, ref l) => List(remove_comment_tags(s), l.iter()
-                                         .transform(|x| x.node.clean()).collect()),
-            ast::meta_name_value(s, ref v) => NameValue(remove_comment_tags(s),
-                                         remove_comment_tags(lit_to_str(v)))
-        }
-    }
-}
-
-impl Clean<StructField> for doctree::StructField {
-    pub fn clean(&self) -> StructField {
-        StructField {
-            name: if self.name.is_some() { its(&self.name.unwrap()).to_owned() } else { ~"" },
-            type_: self.type_.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            visibility: self.visibility
-        }
-    }
-}
-
-impl Clean<Lifetime> for ast::Lifetime {
-    pub fn clean(&self) -> Lifetime {
-        Lifetime(its(&self.ident).to_owned())
-    }
-}
-
-impl Clean<TyParamBound> for ast::TyParamBound {
-    pub fn clean(&self) -> TyParamBound {
-        match *self {
-            ast::RegionTyParamBound => RegionBound,
-            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
-        }
-    }
-}
-
-impl Clean<TyParam> for ast::TyParam {
-    pub fn clean(&self) -> TyParam {
-        TyParam {
-            name: its(&self.ident).to_owned(),
-            node: self.id,
-            bounds: self.bounds.iter().transform(|x| x.clean()).collect()
-        }
-    }
 }
 
 /// Given a Type, resolve it using the def_map
@@ -365,6 +524,7 @@ fn resolve_type(t: &Type) -> Type {
         _ => fail!("resolved type maps to a weird def"),
     })
 }
+<<<<<<< HEAD
 
 impl Clean<Type> for ast::Ty {
     pub fn clean(&self) -> Type {
@@ -491,3 +651,5 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
         self.iter().transform(|x| x.clean()).collect()
     }
 }
+=======
+>>>>>>> 612a426b54b552e60cb810cbb707c8f648707d02
