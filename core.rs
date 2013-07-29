@@ -24,7 +24,12 @@ pub struct DocContext {
 
 /// Parses, resolves, and typechecks the given crate
 fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
+    use syntax::codemap::dummy_spanned;
+    use rustc::driver::driver::*;
+
     let parsesess = parse::new_parse_sess(None);
+    let input = file_input(cpath.clone());
+
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
         maybe_sysroot: Some(@os::self_exe_path().get().pop()),
@@ -41,25 +46,20 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
                                                   syntax::diagnostic::emit,
                                                   span_diagnostic_handler);
 
-    let (crate, tycx) = driver::driver::compile_upto(sess, sessopts.cfg.clone(),
-                                                     &driver::driver::file_input(cpath.clone()),
-                                                     driver::driver::cu_typeck, None);
+    let mut cfg = build_configuration(sess, @"rustdoc_ng", &input);
+    cfg.push(@dummy_spanned(ast::MetaWord(@"stage2")));
 
-    DocContext { crate: crate.unwrap(), tycx: tycx.unwrap(), sess: sess }
+    let mut crate = phase_1_parse_input(sess, cfg.clone(), &input);
+    crate = phase_2_configure_and_expand(sess, cfg, crate);
+    let analysis = phase_3_run_analysis_passes(sess, crate);
+
+    DocContext { crate: crate, tycx: analysis.ty_cx, sess: sess }
 }
 
-pub fn run_core (args: ~[~str]) -> clean::Crate {
-    use extra::getopts::*;
+pub fn run_core (libs: ~[Path], path: &Path) -> clean::Crate {
     use std::hashmap::HashMap;
 
-    let orig_args = args.clone();
-    let opts = ~[
-        optmulti("L")
-    ];
-    let matches = getopts(args.tail(), opts).get();
-    let libs = opt_strs(&matches, "L").map(|s| Path(*s));
-
-    let ctxt = @get_ast_and_resolve(&Path(matches.free[0]), libs);
+    let ctxt = @get_ast_and_resolve(path, libs);
     debug!("defmap:");
     for ctxt.tycx.def_map.iter().advance |(k, v)| {
         debug!("%?: %?", k, v);

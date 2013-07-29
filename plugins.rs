@@ -6,7 +6,7 @@ use extra;
 use dl = std::unstable::dynamic_lib;
 
 pub type plugin_callback = extern fn (&mut clean::Crate) -> (~str, @extra::json::ToJson);
-pub type plugin_result = (~str, @extra::json::ToJson);
+pub type PluginResult = (~str, @extra::json::ToJson);
 
 /// Manages loading and running of plugins
 pub struct PluginManager {
@@ -33,14 +33,15 @@ impl PluginManager {
     /// elsewhere, libname.so.
     pub fn load_plugin(&mut self, name: ~str) {
         let x = self.prefix.push(libname(name));
-        let lib = dl::DynamicLibrary::open(Some(&x)).unwrap();
+        let lib_result = dl::DynamicLibrary::open(Some(&x));
+        let lib = lib_result.unwrap();
         let plugin = unsafe { lib.symbol("rustdoc_plugin_entrypoint") }.unwrap();
         self.dylibs.push(lib);
         self.callbacks.push(plugin);
     }
 
     /// Run all the loaded plugins over the crate, returning their results
-    pub fn run_plugins(&self, crate: &mut clean::Crate) -> ~[plugin_result] {
+    pub fn run_plugins(&self, crate: &mut clean::Crate) -> ~[PluginResult] {
         self.callbacks.iter().transform(|&x| x(crate)).collect()
     }
 }

@@ -17,6 +17,24 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
     }
 }
 
+impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
+    pub fn clean(&self) -> Option<U> {
+        match self {
+            &None => None,
+            &Some(ref v) => Some(v.clean())
+        }
+    }
+}
+
+impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
+    pub fn clean(&self) -> ~[U] {
+        match self {
+            &syntax::opt_vec::Empty => ~[],
+            &syntax::opt_vec::Vec(ref v) => v.clean()
+        }
+    }
+}
+
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
@@ -117,6 +135,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     }
 }
 
+#[deriving(Clone)]
 pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
@@ -196,12 +215,63 @@ impl Clean<Function> for doctree::Function {
     }
 }
 
+pub struct ClosureDecl {
+    sigil: ast::Sigil,
+    region: Option<Lifetime>,
+    lifetimes: ~[Lifetime],
+    decl: FnDecl
+}
+
+#[doc = "Automatically derived."]
+impl ::std::clone::Clone for ClosureDecl {
+    pub fn clone(&self) -> ClosureDecl {
+        match *self {
+            ClosureDecl{sigil: ref __self_0_0,
+            region: ref __self_0_1,
+            lifetimes: ref __self_0_2,
+            decl: ref __self_0_3} => ClosureDecl {
+                sigil: __self_0_0.clone(),
+                region: __self_0_1.clone(),
+                lifetimes: __self_0_2.clone(),
+                decl: (*__self_0_3).clone(),
+            },
+        }
+    }
+}
+
+impl Clean<ClosureDecl> for ast::TyClosure {
+    pub fn clean(&self) -> ClosureDecl {
+        ClosureDecl {
+            sigil: self.sigil,
+            region: self.region.clean(),
+            lifetimes: self.lifetimes.clean(),
+            decl: self.decl.clean()
+        }
+    }
+}
 
 pub struct FnDecl {
     inputs: ~[Argument],
     output: @Type,
     cf: RetStyle,
     attrs: ~[Attribute]
+}
+
+#[doc = "Automatically derived."]
+impl ::std::clone::Clone for FnDecl {
+    pub fn clone(&self) -> FnDecl {
+        match *self {
+            FnDecl{inputs: ref __self_0_0,
+            output: ref __self_0_1,
+            cf: ref __self_0_2,
+            attrs: ref __self_0_3} => FnDecl{
+                inputs: __self_0_0.clone(),
+                output: __self_0_1.clone(),
+                cf: (*__self_0_2).clone(),
+                attrs: __self_0_3.clone(),
+            }
+        }
+    }
 }
 
 impl Clean<FnDecl> for ast::fn_decl {
@@ -215,11 +285,11 @@ impl Clean<FnDecl> for ast::fn_decl {
     }
 }
 
-
+#[deriving(Clone)]
 pub struct Argument {
     mutable: bool,
     ty: @Type,
-    //TODO pat
+    name: ~str,
     id: ast::node_id
 }
 
@@ -227,12 +297,14 @@ impl Clean<Argument> for ast::arg {
     pub fn clean(&self) -> Argument {
         Argument {
             mutable: self.is_mutbl,
+            name: name_from_pat(self.pat),
             ty: @(self.ty.clean()),
             id: self.id
         }
     }
 }
 
+#[deriving(Clone)]
 pub enum RetStyle {
     NoReturn,
     Return
@@ -282,12 +354,15 @@ pub enum Type {
     Self(ast::node_id),
     /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
+    Closure(~ClosureDecl),
     Tuple(~[Type]),
     Vector(~Type),
     String,
     Bool,
     /// aka ty_nil
     Unit,
+    /// aka ty_bot
+    Bottom,
     Unique(~Type),
     Managed(~Type),
     // region, raw, other boxes, mutable
@@ -307,7 +382,9 @@ impl Clean<Type> for ast::Ty {
             ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
-            _ => fail!("Unimplemented type (this is a bug)"),
+            ty_closure(ref c) => Closure(~c.clean()),
+            ty_bot => Bottom,
+            ref x => fail!("Unimplemented type %?", x),
         };
         resolve_type(&t)
     }
@@ -436,7 +513,6 @@ impl Clean<VariantKind> for ast::variant_kind {
     }
 }
 
-
 impl Clean<~str> for syntax::codemap::span {
     pub fn clean(&self) -> ~str {
         let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
@@ -444,6 +520,17 @@ impl Clean<~str> for syntax::codemap::span {
     }
 }
 
+impl Clean<~str> for ast::Path {
+    pub fn clean(&self) -> ~str {
+        use syntax::parse::token::interner_get;
+
+        let mut s = ~"";
+        for self.idents.iter().transform(|x| interner_get(x.name)).advance|i| {
+            s.push_str(i);
+        }
+        s
+    }
+}
 // Utility functions
 
 fn lit_to_str(lit: &ast::lit) -> ~str {
@@ -460,11 +547,36 @@ fn lit_to_str(lit: &ast::lit) -> ~str {
     }
 }
 
+fn name_from_pat(p: &ast::pat) -> ~str {
+    use syntax::ast::*;
+    match p.node {
+        pat_wild => ~"_",
+        pat_ident(_, ref p, _) => p.clean(),
+        pat_enum(ref p, _) => p.clean(),
+        pat_struct(*) => fail!("tried to get argument name from pat_struct, \
+                                 which is not allowed in function arguments"),
+        pat_tup(*) => ~"(tuple arg NYI)",
+        pat_box(p) => name_from_pat(p),
+        pat_uniq(p) => name_from_pat(p),
+        pat_region(p) => name_from_pat(p),
+        pat_lit(*) => fail!("tried to get argument name from pat_lit, \
+                             which is not allowed in function arguments"),
+        pat_range(*) => fail!("tried to get argument name from pat_range, \
+                               which is not allowed in function arguments"),
+        pat_vec(*) => fail!("tried to get argument name from pat_vec, \
+                             which is not allowed in function arguments")
+    }
+}
+
 fn remove_comment_tags(s: &str) -> ~str {
-    match s.slice(0,3) {
-        &"///" => return s.slice(3, s.len()).trim().to_owned(),
-        &"/**" | &"/*!" => return s.slice(3, s.len() - 2).trim().to_owned(),
-        _ => return s.trim().to_owned()
+    if s.starts_with("/") {
+        match s.slice(0,3) {
+            &"///" => return s.slice(3, s.len()).trim().to_owned(),
+            &"/**" | &"/*!" => return s.slice(3, s.len() - 2).trim().to_owned(),
+            _ => return s.trim().to_owned()
+        }
+    } else {
+        return s.to_owned();
     }
 }
 

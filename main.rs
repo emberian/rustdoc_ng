@@ -25,6 +25,35 @@ pub static ctxtkey: std::local_data::Key<@core::DocContext> = &std::local_data::
 
 
 fn main() {
-    let mut crate = core::run_core(std::os::args());
-    println(crate.to_json().to_str());
+    use extra::getopts::*;
+
+    let args = std::os::args();
+    let opts = ~[
+        optmulti("L"),
+        optmulti("p"),
+    ];
+
+    let matches = getopts(args.tail(), opts).get();
+    let libs = opt_strs(&matches, "L").map(|s| Path(*s));
+
+    let cratepath = Path(matches.free[0]);
+
+    let mut crate = core::run_core(libs, &cratepath);
+    let mut json = match crate.to_json() {
+        extra::json::Object(o) => o,
+        _ => fail!("JSON returned was not an object")
+    };
+
+    let mut pm = plugins::PluginManager::new(Path("/tmp/rustdoc_ng/plugins"));
+
+    for opt_strs(&matches, "p").consume_iter().advance |pname| {
+        pm.load_plugin(pname);
+    }
+
+    let mut res = pm.run_plugins(&mut crate);
+    for res.iter().advance |&(ref s, ref toj)| {
+        json.insert(s.clone(), toj.to_json());
+    }
+
+    println(extra::json::Object(json).to_str());
 }
