@@ -580,12 +580,41 @@ fn remove_comment_tags(s: &str) -> ~str {
     }
 }
 
-fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
+enum CleanCommentStates {
+    Collect,
+    Strip,
+    Stripped,
+}
+
+fn clean_comment_body(s: ~str) -> ~str {
+    let mut res = ~"";
+    let mut state = Strip;
+
+    for s.iter().advance |char| {
+        match (state, char) {
+            (Strip, '*') => state = Stripped,
+            (Strip, '/') => state = Stripped,
+            (Stripped, '/') => state = Stripped,
+            (Strip, ' ') => (),
+            (Strip, '\t') => (),
+            (Stripped, ' ') => state = Collect,
+            (Stripped, '\t') => state = Collect,
+            (_, '\n') => { res.push_char(char); state = Strip; }
+            (_, char) => res.push_char(char)
+        }
+    }
+
+    res = res.trim().to_owned();
+    res.push_char('\n');
+    res
+}
+
+pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
     for attrs.iter().advance |at| {
         match *at {
             //XXX how should these be separated?
-            NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", s.clone())),
+            NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", clean_comment_body(s.clone()))),
             _ => ()
         }
     }
@@ -636,4 +665,28 @@ fn resolve_type(t: &Type) -> Type {
         def_typaram_binder(i) => i,
         _ => fail!("resolved type maps to a weird def"),
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::NameValue;
+
+    #[test]
+    fn test_doc_collapsing() {
+        assert_eq!(collapse_docs(~"// Foo\n//Bar\n // Baz\n"), ~"Foo\nBar\nBaz");
+        assert_eq!(collapse_docs(~"* Foo\n *  Bar\n *Baz\n"), ~"Foo\n Bar\nBaz");
+        assert_eq!(collapse_docs(~"* Short desc\n *\n * Bar\n *Baz\n"), ~"Short desc\n\nBar\nBaz");
+        assert_eq!(collapse_docs(~" * Foo"), ~"Foo");
+        assert_eq!(collapse_docs(~"\n *\n *\n * Foo"), ~"Foo");
+    }
+
+    fn collapse_docs(input: ~str) -> ~str {
+        let attrs = ~[NameValue(~"doc", input)];
+        let attrs_clean = super::collapse_docs(attrs);
+
+        match attrs_clean[0] {
+            NameValue(~"doc", s) => s,
+            _ => (fail!("dude where's my doc?"))
+        }
+    }
 }
