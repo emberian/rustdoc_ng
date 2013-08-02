@@ -1,6 +1,4 @@
-use core;
 use clean;
-use super::ctxtkey;
 
 use extra;
 use dl = std::unstable::dynamic_lib;

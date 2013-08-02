@@ -372,7 +372,7 @@ impl Clean<Type> for ast::Ty {
         debug!("cleaning type `%?`", self);
         let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
-        let mut t = match self.node {
+        let t = match self.node {
             ty_nil => Unit,
             ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
             ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),

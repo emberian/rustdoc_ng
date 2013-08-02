@@ -50,7 +50,7 @@ fn main() {
         pm.load_plugin(pname);
     }
 
-    let mut res = pm.run_plugins(&mut crate);
+    let res = pm.run_plugins(&mut crate);
     for res.iter().advance |&(ref s, ref toj)| {
         json.insert(s.clone(), toj.to_json());
     }

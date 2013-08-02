@@ -1,16 +1,12 @@
 use rustc;
-use rustc::{front, metadata, driver, middle};
+use rustc::{driver, middle};
 
 use syntax;
 use syntax::parse;
 use syntax::ast;
-use syntax::ast_map;
 
 use std::os;
 use std::local_data;
-use extra::json::ToJson;
-
-use syntax::visit::Visitor;
 
 use visit::RustdocVisitor;
 use clean;
@@ -42,7 +38,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     let span_diagnostic_handler =
         syntax::diagnostic::mk_span_handler(diagnostic_handler, parsesess.cm);
 
-    let mut sess = driver::driver::build_session_(sessopts, parsesess.cm,
+    let sess = driver::driver::build_session_(sessopts, parsesess.cm,
                                                   syntax::diagnostic::emit,
                                                   span_diagnostic_handler);
 
@@ -57,8 +53,6 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
 }
 
 pub fn run_core (libs: ~[Path], path: &Path) -> clean::Crate {
-    use std::hashmap::HashMap;
-
     let ctxt = @get_ast_and_resolve(path, libs);
     debug!("defmap:");
     for ctxt.tycx.def_map.iter().advance |(k, v)| {
@@ -66,7 +60,7 @@ pub fn run_core (libs: ~[Path], path: &Path) -> clean::Crate {
     }
     local_data::set(super::ctxtkey, ctxt);
 
-    let mut v = @mut RustdocVisitor::new();
+    let v = @mut RustdocVisitor::new();
     v.visit(ctxt.crate);
 
     v.clean()

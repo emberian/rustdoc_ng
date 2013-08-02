@@ -1,5 +1,5 @@
 use extra::treemap::TreeMap;
-use extra::json::{ToJson, Json, Object, String, Boolean};
+use extra::json::{ToJson, Json, Object, String};
 
 use syntax::ast;
 

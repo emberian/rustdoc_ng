@@ -2,10 +2,9 @@
 
 use std::vec;
 
-use syntax;
 use syntax::abi::AbiSet;
 use syntax::{visit, ast, ast_map};
-use syntax::visit::{Visitor, fn_kind};
+use syntax::visit::{Visitor};
 use syntax::codemap::span;
 
 use doctree::*;
@@ -73,8 +72,8 @@ impl RustdocVisitor {
             }
         }
 
-        fn visit_fn(item: &ast::item, fd: &ast::fn_decl, purity: &ast::purity,
-                     abi: &AbiSet, gen: &ast::Generics) -> Function {
+        fn visit_fn(item: &ast::item, fd: &ast::fn_decl, _purity: &ast::purity,
+                     _abi: &AbiSet, gen: &ast::Generics) -> Function {
             debug!("Visiting fn");
             Function {
                 id: item.id,
@@ -88,11 +87,11 @@ impl RustdocVisitor {
         }
 
         // Only run on the toplevel mod(s)
-        fn visit_mod(m: &ast::_mod, span: span, id: ast::NodeId, (rcx, vt): (rdv, vst)) {
+        fn visit_mod(m: &ast::_mod, span: span, id: ast::NodeId, (rcx, _vt): (rdv, vst)) {
             rcx.mods.push(visit_mod_contents(m, span, id));
         }
 
-        fn visit_mod_contents(m: &ast::_mod, span: span, id: ast::NodeId) -> Module {
+        fn visit_mod_contents(m: &ast::_mod, _span: span, id: ast::NodeId) -> Module {
             let am = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.items;
             let name = match am.find(&id) {
                 Some(m) => match m {
