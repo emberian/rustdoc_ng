@@ -107,7 +107,7 @@ impl Clean<Attribute> for ast::Attribute {
 
 pub struct TyParam {
     name: ~str,
-    node: ast::node_id,
+    node: ast::NodeId,
     bounds: ~[TyParamBound]
 }
 
@@ -173,7 +173,7 @@ pub struct Method {
     attrs: ~[Attribute],
     generics: Generics,
     //explicit_self: ExplicitSelf,
-    id: ast::node_id,
+    id: ast::NodeId,
     vis: Visibility
 }
 
@@ -181,7 +181,7 @@ pub struct TyMethod {
     ident: ~str,
     attrs: ~[Attribute],
     generics: Generics,
-    id: ast::node_id,
+    id: ast::NodeId,
 
 }
 
@@ -197,7 +197,7 @@ pub struct Function {
     where: ~str,
     generics: Generics,
     //body: Block,
-    id: ast::node_id,
+    id: ast::NodeId,
     attrs: ~[Attribute]
 }
 
@@ -287,16 +287,14 @@ impl Clean<FnDecl> for ast::fn_decl {
 
 #[deriving(Clone)]
 pub struct Argument {
-    mutable: bool,
     ty: @Type,
     name: ~str,
-    id: ast::node_id
+    id: ast::NodeId
 }
 
 impl Clean<Argument> for ast::arg {
     pub fn clean(&self) -> Argument {
         Argument {
-            mutable: self.is_mutbl,
             name: name_from_pat(self.pat),
             ty: @(self.ty.clean()),
             id: self.id
@@ -344,14 +342,14 @@ impl Trait {
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
-    Unresolved(ast::node_id),
+    Unresolved(ast::NodeId),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
-    Resolved(ast::node_id),
+    Resolved(ast::NodeId),
     /// For parameterized types, so the consumer of the JSON don't go looking
     /// for types which don't exist anywhere.
-    Generic(ast::node_id),
+    Generic(ast::NodeId),
     /// For references to self
-    Self(ast::node_id),
+    Self(ast::NodeId),
     /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
     Closure(~ClosureDecl),
@@ -413,7 +411,7 @@ pub type Visibility = ast::visibility;
 pub struct Struct {
     name: ~str,
     where: ~str,
-    node: ast::node_id,
+    node: ast::NodeId,
     struct_type: doctree::StructType,
     attrs: ~[Attribute],
     generics: Generics,
@@ -457,7 +455,7 @@ pub struct Enum {
     generics: Generics,
     attrs: ~[Attribute],
     name: ~str,
-    node: ast::node_id,
+    node: ast::NodeId,
     where: ~str,
 }
 

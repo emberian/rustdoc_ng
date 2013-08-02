@@ -269,7 +269,6 @@ impl ToJson for clean::FnDecl {
 impl ToJson for clean::Argument {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"mutable", Boolean(self.mutable));
         o.insert(~"type", self.ty.to_json());
         o.insert(~"id", self.id.to_json());
         o.insert(~"name", self.name.to_json());

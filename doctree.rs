@@ -2,7 +2,7 @@
 
 use syntax::codemap::span;
 use syntax::ast;
-use syntax::ast::{ident, node_id};
+use syntax::ast::{ident, NodeId};
 
 pub struct Module {
     name: Option<ident>,
@@ -44,7 +44,7 @@ pub enum TypeBound {
 }
 
 pub struct StructField {
-    id: node_id,
+    id: NodeId,
     type_: ast::Ty,
     /// Name is optional for tuple structs
     name: Option<ident>,
@@ -69,7 +69,7 @@ impl StructField {
 }
 
 pub struct Struct {
-    id: node_id,
+    id: NodeId,
     struct_type: StructType,
     name: ident,
     generics: ast::Generics,
@@ -82,7 +82,7 @@ pub struct Enum {
     variants: ~[Variant],
     generics: ast::Generics,
     attrs: ~[ast::Attribute],
-    id: node_id,
+    id: NodeId,
     where: span,
     name: ident,
 }
@@ -97,7 +97,7 @@ pub struct Variant {
 pub struct Function {
     decl: ast::fn_decl,
     attrs: ~[ast::Attribute],
-    id: node_id,
+    id: NodeId,
     name: ident,
     visibility: ast::visibility,
     where: span,
