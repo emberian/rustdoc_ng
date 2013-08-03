@@ -127,6 +127,16 @@ impl RustdocVisitor {
                     };
                     om.typedefs.push(t);
                 },
+                ast::item_static(ref ty, ref mut_, ref exp) => {
+                    let s = Static {
+                        type_: ty.clone(),
+                        mutability: mut_.clone(),
+                        expr: exp.clone(),
+                        name: item.ident,
+                        attrs: item.attrs.clone(),
+                    };
+                    om.statics.push(s);
+                },
                 _ => (),
             }
         }

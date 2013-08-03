@@ -65,12 +65,13 @@ pub struct Module {
     fns: ~[Function],
     mods: ~[Module],
     typedefs: ~[Typedef],
+    statics: ~[Static],
 }
 
 impl Clean<Module> for doctree::Module {
     pub fn clean(&self) -> Module {
         let name = if self.name.is_some() {
-            its(&self.name.unwrap()).to_owned()
+            self.name.unwrap().clean()
         } else {
             ~""
         };
@@ -82,6 +83,7 @@ impl Clean<Module> for doctree::Module {
             fns: self.fns.clean(),
             mods: self.mods.clean(),
             typedefs: self.typedefs.clean(),
+            statics: self.statics.clean(),
         }
     }
 }
@@ -121,7 +123,7 @@ pub struct TyParam {
 impl Clean<TyParam> for ast::TyParam {
     pub fn clean(&self) -> TyParam {
         TyParam {
-            name: its(&self.ident).to_owned(),
+            name: self.ident.clean(),
             node: self.id,
             bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
@@ -157,7 +159,7 @@ pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
     pub fn clean(&self) -> Lifetime {
-        Lifetime(its(&self.ident).to_owned())
+        Lifetime(self.ident.clean())
     }
 }
 
@@ -241,7 +243,7 @@ impl Clean<Function> for doctree::Function {
     pub fn clean(&self) -> Function {
         Function {
             decl: self.decl.clean(),
-            name: its(&self.name).to_owned(),
+            name: self.name.clean(),
             id: self.id,
             attrs: collapse_docs(self.attrs.clean()),
             where: self.where.clean(),
@@ -431,7 +433,7 @@ pub struct StructField {
 impl Clean<StructField> for doctree::StructField {
     pub fn clean(&self) -> StructField {
         StructField {
-            name: if self.name.is_some() { its(&self.name.unwrap()).to_owned() } else { ~"" },
+            name: if self.name.is_some() { self.name.unwrap().clean() } else { ~"" },
             type_: self.type_.clean(),
             attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             visibility: self.visibility
@@ -454,7 +456,7 @@ pub struct Struct {
 impl Clean<Struct> for doctree::Struct {
     pub fn clean(&self) -> Struct {
         Struct {
-            name: its(&self.name).to_owned(),
+            name: self.name.clean(),
             node: self.id,
             struct_type: self.struct_type,
             attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
@@ -498,7 +500,7 @@ impl Clean<Enum> for doctree::Enum {
             variants: self.variants.iter().transform(|x| x.clean()).collect(),
             generics: self.generics.clean(),
             attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            name: its(&self.name).to_owned(),
+            name: self.name.clean(),
             where: self.where.clean(),
             node: self.id
         }
@@ -515,7 +517,7 @@ pub struct Variant {
 impl Clean<Variant> for doctree::Variant {
     pub fn clean(&self) -> Variant {
         Variant {
-            name: its(&self.name).to_owned(),
+            name: self.name.clean(),
             attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
             kind: self.kind.clean(),
             visibility: self.visibility
@@ -563,6 +565,12 @@ impl Clean<~str> for ast::Path {
     }
 }
 
+impl Clean<~str> for ast::ident {
+    pub fn clean(&self) -> ~str {
+        its(self).to_owned()
+    }
+}
+
 pub struct Typedef {
     name: ~str,
     type_: Type,
@@ -576,7 +584,7 @@ impl Clean<Typedef> for doctree::Typedef {
         Typedef {
             type_: self.ty.clean(),
             generics: self.gen.clean(),
-            name: its(&self.name).to_owned(),
+            name: self.name.clean(),
             id: self.id.clone(),
             attrs: self.attrs.clean(),
         }
@@ -602,7 +610,59 @@ impl Clean<BareFunctionDecl> for ast::TyBareFn {
     }
 }
 
-// Utility functions
+pub struct Static {
+    name: ~str,
+    type_: Type,
+    mutability: Mutability,
+    /// It's useful to have the value of a static documented, but I have no
+    /// desire to represent expressions (that'd basically be all of the AST,
+    /// which is huge!). So, have a string.
+    expr: ~str,
+    attrs: ~[Attribute],
+}
+
+impl Clean<Static> for doctree::Static {
+    pub fn clean(&self) -> Static {
+        debug!("claning static %s: %?", self.name.clean(), self);
+        Static {
+            type_: self.type_.clean(),
+            mutability: self.mutability.clean(),
+            expr: self.expr.span.to_src(),
+            name: self.name.clean(),
+            attrs: self.attrs.clean(),
+        }
+    }
+}
+
+#[deriving(ToStr, Clone)]
+pub enum Mutability {
+    Mutable,
+    Immutable,
+    Const,
+}
+
+impl Clean<Mutability> for ast::mutability {
+    pub fn clean(&self) -> Mutability {
+        match self {
+            &ast::m_mutbl => Mutable,
+            &ast::m_imm => Immutable,
+            &ast::m_const => Const
+        }
+    }
+}
+
+// Utilities
+
+trait ToSource {
+    pub fn to_src(&self) -> ~str;
+}
+
+impl ToSource for syntax::codemap::span {
+    pub fn to_src(&self) -> ~str {
+        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
+        cm.span_to_snippet(self.clone())
+    }
+}
 
 fn lit_to_str(lit: &ast::lit) -> ~str {
     match lit.node {

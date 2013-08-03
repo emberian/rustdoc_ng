@@ -27,6 +27,7 @@ impl ToJson for clean::Module {
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"typedefs", self.typedefs.to_json());
+        o.insert(~"statics", self.statics.to_json());
         Object(o)
     }
 }
@@ -309,6 +310,18 @@ impl ToJson for clean::BareFunctionDecl {
         o.insert(~"lifetimes", self.lifetimes.to_json());
         o.insert(~"decl", self.decl.to_json());
         o.insert(~"abi", self.abi.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Static {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"type", self.type_.to_json());
+        o.insert(~"mutability", self.mutability.to_str().to_json());
+        o.insert(~"expr", self.expr.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }
 }

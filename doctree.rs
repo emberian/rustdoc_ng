@@ -4,14 +4,14 @@ use syntax::codemap::span;
 use syntax::ast;
 use syntax::ast::{ident, NodeId};
 
-pub struct Module {
-    name: Option<ident>,
+pub struct Module { name: Option<ident>,
     attrs: ~[ast::Attribute],
     structs: ~[Struct],
     enums: ~[Enum],
     fns: ~[Function],
     mods: ~[Module],
     typedefs: ~[Typedef],
+    statics: ~[Static],
 }
 
 impl Module {
@@ -24,6 +24,7 @@ impl Module {
             fns: ~[],
             mods: ~[],
             typedefs: ~[],
+            statics: ~[],
         }
     }
 }
@@ -111,6 +112,14 @@ pub struct Typedef {
     gen: ast::Generics,
     name: ast::ident,
     id: ast::NodeId,
+    attrs: ~[ast::Attribute],
+}
+
+pub struct Static {
+    type_: ast::Ty,
+    mutability: ast::mutability,
+    expr: @ast::expr,
+    name: ast::ident,
     attrs: ~[ast::Attribute],
 }
 
