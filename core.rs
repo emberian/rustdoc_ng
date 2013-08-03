@@ -49,6 +49,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
     crate = phase_2_configure_and_expand(sess, cfg, crate);
     let analysis = phase_3_run_analysis_passes(sess, crate);
 
+    debug!("crate: %?", crate);
     DocContext { crate: crate, tycx: analysis.ty_cx, sess: sess }
 }
 

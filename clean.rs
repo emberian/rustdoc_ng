@@ -44,9 +44,13 @@ pub struct Crate {
 impl Clean<Crate> for visit::RustdocVisitor {
     pub fn clean(&self) -> Crate {
         use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
+        let maybe_meta = last_meta_item_value_str_by_name(find_linkage_metas(self.attrs), "name");
+
         Crate {
-            name: last_meta_item_value_str_by_name(find_linkage_metas(self.attrs),
-                                                   "name").unwrap().to_owned(),
+            name: match maybe_meta {
+                Some(x) => x.to_owned(),
+                None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
+            },
             mods: self.mods.clean(),
             attrs: self.attrs.clean(),
         }
@@ -105,6 +109,7 @@ impl Clean<Attribute> for ast::Attribute {
     }
 }
 
+#[deriving(Clone)]
 pub struct TyParam {
     name: ~str,
     node: ast::NodeId,
@@ -126,6 +131,16 @@ pub enum TyParamBound {
     TraitBound(Trait)
 }
 
+#[doc = "Automatically derived."]
+impl ::std::clone::Clone for TyParamBound {
+    pub fn clone(&self) -> TyParamBound {
+        match *self {
+            RegionBound => RegionBound,
+            TraitBound(ref __self_0) => TraitBound((*__self_0).clone())
+        }
+    }
+}
+
 impl Clean<TyParamBound> for ast::TyParamBound {
     pub fn clean(&self) -> TyParamBound {
         match *self {
@@ -145,6 +160,7 @@ impl Clean<Lifetime> for ast::Lifetime {
 }
 
 // maybe use a Generic enum and use ~[Generic]?
+#[deriving(Clone)]
 pub struct Generics {
     lifetimes: ~[Lifetime],
     type_params: ~[TyParam]
@@ -176,6 +192,24 @@ pub struct Method {
     id: ast::NodeId,
     vis: Visibility
 }
+
+impl ::std::clone::Clone for Method {
+    pub fn clone(&self) -> Method {
+        match *self {
+            Method{ident: ref __self_0_0,
+            attrs: ref __self_0_1,
+            generics: ref __self_0_2,
+            id: ref __self_0_3,
+            vis: ref __self_0_4} =>
+                Method{ident: __self_0_0.clone(),
+                attrs: __self_0_1.clone(),
+                generics: (*__self_0_2).clone(),
+                id: __self_0_3.clone(),
+                vis: __self_0_4.clone(),}
+        }
+    }
+}
+
 
 pub struct TyMethod {
     ident: ~str,
@@ -215,28 +249,15 @@ impl Clean<Function> for doctree::Function {
     }
 }
 
+#[deriving(Clone)]
 pub struct ClosureDecl {
     sigil: ast::Sigil,
     region: Option<Lifetime>,
     lifetimes: ~[Lifetime],
-    decl: FnDecl
-}
-
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for ClosureDecl {
-    pub fn clone(&self) -> ClosureDecl {
-        match *self {
-            ClosureDecl{sigil: ref __self_0_0,
-            region: ref __self_0_1,
-            lifetimes: ref __self_0_2,
-            decl: ref __self_0_3} => ClosureDecl {
-                sigil: __self_0_0.clone(),
-                region: __self_0_1.clone(),
-                lifetimes: __self_0_2.clone(),
-                decl: (*__self_0_3).clone(),
-            },
-        }
-    }
+    decl: FnDecl,
+    onceness: ast::Onceness,
+    purity: ast::purity,
+    bounds: ~[TyParamBound]
 }
 
 impl Clean<ClosureDecl> for ast::TyClosure {
@@ -245,7 +266,13 @@ impl Clean<ClosureDecl> for ast::TyClosure {
             sigil: self.sigil,
             region: self.region.clean(),
             lifetimes: self.lifetimes.clean(),
-            decl: self.decl.clean()
+            decl: self.decl.clean(),
+            onceness: self.onceness,
+            purity: self.purity,
+            bounds: match self.bounds {
+                Some(ref x) => x.clean(),
+                None        => ~[]
+            },
         }
     }
 }
@@ -317,6 +344,7 @@ impl Clean<RetStyle> for ast::ret_style {
     }
 }
 
+#[deriving(Clone)]
 pub struct Trait {
     name: ~str,
     methods: ~[Method], //should be TraitMethod

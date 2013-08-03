@@ -252,6 +252,9 @@ impl ToJson for clean::ClosureDecl {
         o.insert(~"region", self.region.to_json());
         o.insert(~"lifetimes", self.lifetimes.to_json());
         o.insert(~"decl", self.decl.to_json());
+        o.insert(~"onceness", self.onceness.to_str().to_json());
+        o.insert(~"purity", self.purity.to_str().to_json());
+        o.insert(~"bounds", self.bounds.to_json());
         Object(o)
     }
 }
