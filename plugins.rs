@@ -45,19 +45,18 @@ impl PluginManager {
 }
 
 #[cfg(target_os="win32")]
-fn libname(n: ~str) -> ~str {
+fn libname(mut n: ~str) -> ~str {
     n.push_str(".dll");
     n
 }
 
 #[cfg(target_os="macos")]
-fn libname(n: ~str) -> ~str {
+fn libname(mut n: ~str) -> ~str {
     n.push_str(".dylib");
     n
 }
 
-#[cfg(not(target_os="win32"))]
-#[cfg(not(target_os="macos"))]
+#[cfg(and(not(target_os="win32"), not(target_os="macos")))]
 fn libname(n: ~str) -> ~str {
     let mut i = ~"lib";
     i.push_str(n);
