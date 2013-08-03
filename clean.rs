@@ -64,6 +64,7 @@ pub struct Module {
     enums: ~[Enum],
     fns: ~[Function],
     mods: ~[Module],
+    typedefs: ~[Typedef],
 }
 
 impl Clean<Module> for doctree::Module {
@@ -80,6 +81,7 @@ impl Clean<Module> for doctree::Module {
             enums: self.enums.clean(),
             fns: self.fns.clean(),
             mods: self.mods.clean(),
+            typedefs: self.typedefs.clean(),
         }
     }
 }
@@ -381,6 +383,8 @@ pub enum Type {
     /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
     Closure(~ClosureDecl),
+    // I have no idea what this is
+    BareFunction(~BareFunctionDecl),
     Tuple(~[Type]),
     Vector(~Type),
     String,
@@ -409,6 +413,7 @@ impl Clean<Type> for ast::Ty {
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
             ty_closure(ref c) => Closure(~c.clean()),
+            ty_bare_fn(ref barefn) => BareFunction(~barefn.clean()),
             ty_bot => Bottom,
             ref x => fail!("Unimplemented type %?", x),
         };
@@ -557,6 +562,46 @@ impl Clean<~str> for ast::Path {
         s
     }
 }
+
+pub struct Typedef {
+    name: ~str,
+    type_: Type,
+    generics: Generics,
+    id: ast::NodeId,
+    attrs: ~[Attribute],
+}
+
+impl Clean<Typedef> for doctree::Typedef {
+    pub fn clean(&self) -> Typedef {
+        Typedef {
+            type_: self.ty.clean(),
+            generics: self.gen.clean(),
+            name: its(&self.name).to_owned(),
+            id: self.id.clone(),
+            attrs: self.attrs.clean(),
+        }
+    }
+}
+
+#[deriving(Clone)]
+pub struct BareFunctionDecl {
+    purity: ast::purity,
+    lifetimes: ~[Lifetime],
+    decl: FnDecl,
+    abi: ~str
+}
+
+impl Clean<BareFunctionDecl> for ast::TyBareFn {
+    pub fn clean(&self) -> BareFunctionDecl {
+        BareFunctionDecl {
+            purity: self.purity,
+            lifetimes: self.lifetimes.clean(),
+            decl: self.decl.clean(),
+            abi: self.abis.to_str(),
+        }
+    }
+}
+
 // Utility functions
 
 fn lit_to_str(lit: &ast::lit) -> ~str {

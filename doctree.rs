@@ -10,7 +10,8 @@ pub struct Module {
     structs: ~[Struct],
     enums: ~[Enum],
     fns: ~[Function],
-    mods: ~[Module]
+    mods: ~[Module],
+    typedefs: ~[Typedef],
 }
 
 impl Module {
@@ -21,7 +22,8 @@ impl Module {
             structs: ~[],
             enums: ~[],
             fns: ~[],
-            mods: ~[]
+            mods: ~[],
+            typedefs: ~[],
         }
     }
 }
@@ -102,6 +104,14 @@ pub struct Function {
     visibility: ast::visibility,
     where: span,
     generics: ast::Generics,
+}
+
+pub struct Typedef {
+    ty: ast::Ty,
+    gen: ast::Generics,
+    name: ast::ident,
+    id: ast::NodeId,
+    attrs: ~[ast::Attribute],
 }
 
 pub fn struct_type_from_def(sd: &ast::struct_def) -> StructType {

@@ -117,6 +117,16 @@ impl RustdocVisitor {
                 ast::item_struct(sd, ref gen) => om.structs.push(visit_struct_def(item, sd, gen)),
                 ast::item_fn(ref fd, ref pur, ref abi, ref gen, _) =>
                     om.fns.push(visit_fn(item, fd, pur, abi, gen)),
+                ast::item_ty(ref ty, ref gen) => {
+                    let t = Typedef {
+                        ty: ty.clone(),
+                        gen: gen.clone(),
+                        name: item.ident,
+                        id: item.id,
+                        attrs: item.attrs.clone(),
+                    };
+                    om.typedefs.push(t);
+                },
                 _ => (),
             }
         }

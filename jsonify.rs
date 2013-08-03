@@ -9,7 +9,7 @@ use clean;
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"schema", String(~"0.2.0"));
+        o.insert(~"schema", String(~"0.3.0"));
         o.insert(~"name", self.name.to_json());
         o.insert(~"mods", self.mods.to_json());
         o.insert(~"attrs", self.attrs.to_json());
@@ -26,6 +26,7 @@ impl ToJson for clean::Module {
         o.insert(~"fns", self.fns.to_json());
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"typedefs", self.typedefs.to_json());
         Object(o)
     }
 }
@@ -104,6 +105,7 @@ impl ToJson for clean::Type {
                               }
                              ),
             &Closure(ref c) => (~"closure", c.to_json()),
+            &BareFunction(ref b) => (~"barefn", b.to_json()),
             &Unique(ref t) => (~"unique", t.to_json()),
             &Managed(ref t) => (~"managed", t.to_json()),
             &Tuple(ref t) => (~"tuple", t.to_json()),
@@ -285,5 +287,28 @@ impl ToJson for clean::RetStyle {
             clean::NoReturn => ~"no_return",
             clean::Return => ~"return"
         })
+    }
+}
+
+impl ToJson for clean::Typedef {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"type", self.type_.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        o.insert(~"id", self.id.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::BareFunctionDecl {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"purity", self.purity.to_str().to_json());
+        o.insert(~"lifetimes", self.lifetimes.to_json());
+        o.insert(~"decl", self.decl.to_json());
+        o.insert(~"abi", self.abi.to_json());
+        Object(o)
     }
 }
