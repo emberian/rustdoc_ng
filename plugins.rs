@@ -3,8 +3,8 @@ use clean;
 use extra;
 use dl = std::unstable::dynamic_lib;
 
-pub type plugin_callback = extern fn (&mut clean::Crate) -> (~str, @extra::json::ToJson);
-pub type PluginResult = (~str, @extra::json::ToJson);
+pub type PluginResult = Option<(~str, @extra::json::ToJson)>;
+pub type plugin_callback = extern fn (&mut clean::Crate) -> PluginResult;
 
 /// Manages loading and running of plugins
 pub struct PluginManager {
@@ -38,6 +38,13 @@ impl PluginManager {
         self.callbacks.push(plugin);
     }
 
+    /// Load a normal Rust function as a plugin.
+    ///
+    /// This is to run passes over the cleaned crate. Plugins run this way
+    /// correspond to the A-aux tag on Github.
+    pub fn add_plugin(&mut self, plugin: plugin_callback) {
+        self.callbacks.push(plugin);
+    }
     /// Run all the loaded plugins over the crate, returning their results
     pub fn run_plugins(&self, crate: &mut clean::Crate) -> ~[PluginResult] {
         self.callbacks.iter().transform(|&x| x(crate)).collect()
@@ -56,7 +63,7 @@ fn libname(mut n: ~str) -> ~str {
     n
 }
 
-#[cfg(and(not(target_os="win32"), not(target_os="macos")))]
+#[cfg(not(target_os="win32"), not(target_os="macos"))]
 fn libname(n: ~str) -> ~str {
     let mut i = ~"lib";
     i.push_str(n);
