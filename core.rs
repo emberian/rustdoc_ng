@@ -56,7 +56,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
 pub fn run_core (libs: ~[Path], path: &Path) -> clean::Crate {
     let ctxt = @get_ast_and_resolve(path, libs);
     debug!("defmap:");
-    for ctxt.tycx.def_map.iter().advance |(k, v)| {
+    for (k, v) in ctxt.tycx.def_map.iter() {
         debug!("%?: %?", k, v);
     }
     local_data::set(super::ctxtkey, ctxt);

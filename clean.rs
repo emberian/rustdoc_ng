@@ -558,7 +558,7 @@ impl Clean<~str> for ast::Path {
         use syntax::parse::token::interner_get;
 
         let mut s = ~"";
-        for self.idents.iter().transform(|x| interner_get(x.name)).advance|i| {
+        for i in self.idents.iter().transform(|x| interner_get(x.name)) {
             s.push_str(i);
         }
         s
@@ -575,6 +575,7 @@ pub struct Typedef {
     name: ~str,
     type_: Type,
     generics: Generics,
+    where: ~str,
     id: ast::NodeId,
     attrs: ~[Attribute],
 }
@@ -587,6 +588,7 @@ impl Clean<Typedef> for doctree::Typedef {
             name: self.name.clean(),
             id: self.id.clone(),
             attrs: self.attrs.clean(),
+            where: self.where.clean(),
         }
     }
 }
@@ -614,6 +616,7 @@ pub struct Static {
     name: ~str,
     type_: Type,
     mutability: Mutability,
+    where: ~str,
     /// It's useful to have the value of a static documented, but I have no
     /// desire to represent expressions (that'd basically be all of the AST,
     /// which is huge!). So, have a string.
@@ -630,6 +633,7 @@ impl Clean<Static> for doctree::Static {
             expr: self.expr.span.to_src(),
             name: self.name.clean(),
             attrs: self.attrs.clean(),
+            where: self.where.clean(),
         }
     }
 }
@@ -659,8 +663,11 @@ trait ToSource {
 
 impl ToSource for syntax::codemap::span {
     pub fn to_src(&self) -> ~str {
-        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
-        cm.span_to_snippet(self.clone())
+        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap.clone();
+        match cm.span_to_snippet(*self) {
+            Some(x) => x,
+            None    => ~""
+        }
     }
 }
 
@@ -721,7 +728,7 @@ fn clean_comment_body(s: ~str) -> ~str {
     let mut res = ~"";
     let mut state = Strip;
 
-    for s.iter().advance |char| {
+    for char in s.iter() {
         match (state, char) {
             (Strip, '*') => state = Stripped,
             (Strip, '/') => state = Stripped,
@@ -742,7 +749,7 @@ fn clean_comment_body(s: ~str) -> ~str {
 
 pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
-    for attrs.iter().advance |at| {
+    for at in attrs.iter() {
         match *at {
             //XXX how should these be separated?
             NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", clean_comment_body(s.clone()))),

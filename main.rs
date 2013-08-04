@@ -80,7 +80,7 @@ fn main() {
         })
     }
 
-    for opt_strs(&matches, "p").consume_iter().advance |pname| {
+    for pname in opt_strs(&matches, "p").consume_iter() {
         pm.load_plugin(pname);
     }
 

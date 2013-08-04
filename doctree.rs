@@ -113,6 +113,7 @@ pub struct Typedef {
     name: ast::ident,
     id: ast::NodeId,
     attrs: ~[ast::Attribute],
+    where: span,
 }
 
 pub struct Static {
@@ -121,6 +122,7 @@ pub struct Static {
     expr: @ast::expr,
     name: ast::ident,
     attrs: ~[ast::Attribute],
+    where: span,
 }
 
 pub fn struct_type_from_def(sd: &ast::struct_def) -> StructType {
