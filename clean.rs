@@ -377,6 +377,8 @@ pub enum Type {
     Unresolved(ast::NodeId),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
     Resolved(ast::NodeId),
+    /// Reference to an item in an external crate
+    External(ast::NodeId),
     /// For parameterized types, so the consumer of the JSON don't go looking
     /// for types which don't exist anywhere.
     Generic(ast::NodeId),
@@ -558,7 +560,13 @@ impl Clean<~str> for ast::Path {
         use syntax::parse::token::interner_get;
 
         let mut s = ~"";
+        let mut first = true;
         for i in self.idents.iter().transform(|x| interner_get(x.name)) {
+            if !first {
+                s.push_str("::");
+            } else {
+                first = false;
+            }
             s.push_str(i);
         }
         s
@@ -770,7 +778,7 @@ fn resolve_type(t: &Type) -> Type {
 
     let id = match t {
         &Unresolved(id) => id,
-        _ => return (*t).clone()
+        _ => return (*t).clone(),
     };
 
     let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.def_map;
@@ -785,13 +793,13 @@ fn resolve_type(t: &Type) -> Type {
         }
     };
 
-    Resolved(match *d {
-        def_fn(i, _) => i.node,
+    let def_id = match *d {
+        def_fn(i, _) => i,
         def_self(i, _) | def_self_ty(i) => return Self(i),
-        def_ty(i) => i.node,
+        def_ty(i) => i,
         def_trait(i) => {
             debug!("saw def_trait in def_to_id");
-            i.node
+            i
         },
         def_prim_ty(p) => match p {
             ty_str => return String,
@@ -799,10 +807,16 @@ fn resolve_type(t: &Type) -> Type {
             _ => return Primitive(p)
         },
         def_ty_param(i, _) => return Generic(i.node),
-        def_struct(i) => i.node,
-        def_typaram_binder(i) => i,
+        def_struct(i) => i,
+        def_typaram_binder(i) => return Resolved(i),
         _ => fail!("resolved type maps to a weird def"),
-    })
+    };
+
+    if def_id.crate != ast::CRATE_NODE_ID {
+        External(def_id.node)
+    } else {
+        Resolved(def_id.node)
+    }
 }
 
 #[cfg(test)]

@@ -94,8 +94,9 @@ impl ToJson for clean::Type {
         use super::clean::*;
         let mut o = ~TreeMap::new();
         let (n, v) = match self {
-            &Unresolved(_) => fail!("no unresolved types should survive to jsonification"),
+            &Unresolved(*) => fail!("no unresolved types should survive to jsonification"),
             &Resolved(n) => (~"resolved", n.to_json()),
+            &External(n) => (~"external", n.to_json()),
             &Generic(n) => (~"generic", n.to_json()),
             &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
