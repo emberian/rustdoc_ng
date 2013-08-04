@@ -9,7 +9,7 @@ use clean;
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"schema", String(~"0.3.0"));
+        o.insert(~"schema", String(~"0.4.0"));
         o.insert(~"name", self.name.to_json());
         o.insert(~"mods", self.mods.to_json());
         o.insert(~"attrs", self.attrs.to_json());
@@ -96,7 +96,12 @@ impl ToJson for clean::Type {
         let (n, v) = match self {
             &Unresolved(*) => fail!("no unresolved types should survive to jsonification"),
             &Resolved(n) => (~"resolved", n.to_json()),
-            &External(n) => (~"external", n.to_json()),
+            &External(ref p, ref t) => (~"external", {
+                let mut o = ~TreeMap::new();
+                o.insert(~"path", p.to_json());
+                o.insert(~"type", t.to_json());
+                Object(o)
+            }),
             &Generic(n) => (~"generic", n.to_json()),
             &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
@@ -300,6 +305,7 @@ impl ToJson for clean::Typedef {
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"id", self.id.to_json());
         o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }

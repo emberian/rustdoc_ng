@@ -1,5 +1,6 @@
 use its = syntax::parse::token::ident_to_str;
 
+use rustc::metadata::{csearch,decoder,cstore};
 use syntax;
 use syntax::ast;
 
@@ -377,8 +378,8 @@ pub enum Type {
     Unresolved(ast::NodeId),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
     Resolved(ast::NodeId),
-    /// Reference to an item in an external crate
-    External(ast::NodeId),
+    /// Reference to an item in an external crate (fully qualified path)
+    External(~str, ~str),
     /// For parameterized types, so the consumer of the JSON don't go looking
     /// for types which don't exist anywhere.
     Generic(ast::NodeId),
@@ -789,7 +790,7 @@ fn resolve_type(t: &Type) -> Type {
             let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
                    syntax::ast_map::node_id_to_str(ctxt.tycx.items, id, ctxt.sess.intr()));
-            fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
+            fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)")
         }
     };
 
@@ -809,11 +810,50 @@ fn resolve_type(t: &Type) -> Type {
         def_ty_param(i, _) => return Generic(i.node),
         def_struct(i) => i,
         def_typaram_binder(i) => return Resolved(i),
-        _ => fail!("resolved type maps to a weird def"),
+        x => fail!("resolved type maps to a weird def %?", x),
     };
 
     if def_id.crate != ast::CRATE_NODE_ID {
-        External(def_id.node)
+        let sess = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess;
+        let mut path = ~"";
+        let mut ty = ~"";
+        do csearch::each_path(sess.cstore, def_id.crate) |pathstr, deflike, _vis| {
+            match deflike {
+                decoder::dl_def(di) => {
+                    let d2 = match di {
+                        def_fn(i, _) | def_ty(i) | def_trait(i) |
+                            def_struct(i) | def_mod(i) => Some(i),
+                        _ => None,
+                    };
+                    if d2.is_some() {
+                        let d2 = d2.unwrap();
+                        if def_id.node == d2.node {
+                            debug!("found external def: %?", di);
+                            path = pathstr.to_owned();
+                            ty = match di {
+                                def_fn(*) => ~"fn", 
+                                def_ty(*) => ~"enum",
+                                def_trait(*) => ~"trait",
+                                def_prim_ty(p) => match p {
+                                    ty_str => ~"str",
+                                    ty_bool => ~"bool",
+                                    _ => Primitive(p).to_json().to_str(),
+                                },
+                                def_ty_param(*) => ~"generic",
+                                def_struct(*) => ~"struct",
+                                def_typaram_binder(*) => ~"typaram_binder",
+                                x => fail!("resolved external maps to a weird def %?", x),
+                            };
+
+                        }
+                    }
+                },
+                _ => (),
+            };
+            true
+        };
+        let cname = cstore::get_crate_data(sess.cstore, def_id.crate).name.to_owned();
+        External(cname + "::" + path, ty)
     } else {
         Resolved(def_id.node)
     }
