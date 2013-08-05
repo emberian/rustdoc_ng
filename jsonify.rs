@@ -30,6 +30,7 @@ impl ToJson for clean::Module {
         o.insert(~"fns", self.fns.to_json());
         o.insert(~"statics", self.statics.to_json());
         o.insert(~"typedefs", self.typedefs.to_json());
+        o.insert(~"view_items", self.view_items.to_json());
         Object(o)
     }
 }
@@ -423,6 +424,56 @@ impl ToJson for clean::Impl {
         o.insert(~"trait", self.trait_.to_json());
         o.insert(~"for", self.for_.to_json());
         o.insert(~"methods", self.methods.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::ViewItem {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"source", self.where.to_json());
+        o.insert(~"visibility", String(match self.vis {
+            ast::public => ~"public",
+            ast::private => ~"private",
+            ast::inherited => ~"inherited"
+        }));
+        match self.inner {
+            clean::ExternMod(ref s, _, _) => {
+                o.insert(~"type", (~"extern").to_json());
+                o.insert(~"name", s.to_json());
+            },
+            clean::Import(ref vps) => {
+                o.insert(~"type", (~"import").to_json());
+                o.insert(~"view_paths", vps.to_json());
+            }
+        }
+        Object(o)
+    }
+}
+
+impl ToJson for clean::ViewPath {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        match *self {
+            clean::SimpleImport(ref name, ref path, ref id) => {
+                o.insert(~"type", (~"simple").to_json());
+                o.insert(~"name", name.to_json());
+                o.insert(~"path", path.to_json());
+                o.insert(~"id", id.to_json());
+            },
+            clean::GlobImport(ref path, ref id) => {
+                o.insert(~"type", (~"glob").to_json());
+                o.insert(~"path", path.to_json());
+                o.insert(~"id", id.to_json());
+            },
+            clean::ImportList(ref path, ref list, ref id) => {
+                o.insert(~"type", (~"list").to_json());
+                o.insert(~"path", path.to_json());
+                o.insert(~"id", id.to_json());
+                o.insert(~"list", list.to_json());
+            }
+        }
         Object(o)
     }
 }

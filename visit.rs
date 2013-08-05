@@ -97,6 +97,7 @@ impl RustdocVisitor {
                 None => None
             };
             let mut om = Module::new(name);
+            om.view_items = m.view_items.clone();
             for i in m.items.iter() {
                 visit_item(*i, &mut om);
             }

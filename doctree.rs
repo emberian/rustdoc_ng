@@ -15,21 +15,23 @@ pub struct Module {
     statics: ~[Static],
     traits: ~[Trait],
     impls: ~[Impl],
+    view_items: ~[ast::view_item],
 }
 
 impl Module {
     pub fn new(name: Option<ident>) -> Module {
         Module {
-            name: name,
-            attrs: ~[],
-            structs: ~[],
-            enums: ~[],
-            fns: ~[],
-            mods: ~[],
-            typedefs: ~[],
-            statics: ~[],
-            traits: ~[],
-            impls: ~[],
+            name       : name,
+            attrs      : ~[],
+            structs    : ~[],
+            enums      : ~[],
+            fns        : ~[],
+            mods       : ~[],
+            typedefs   : ~[],
+            statics    : ~[],
+            traits     : ~[],
+            impls      : ~[],
+            view_items : ~[],
         }
     }
 }

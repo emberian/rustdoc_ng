@@ -32,6 +32,12 @@ impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
     }
 }
 
+impl<T, U: Clean<T>> Clean<T> for syntax::codemap::spanned<U> {
+    pub fn clean(&self) -> T {
+        self.node.clean()
+    }
+}
+
 impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
     pub fn clean(&self) -> ~[U] {
         match self {
@@ -74,6 +80,7 @@ pub struct Module {
     statics: ~[Static],
     traits: ~[Trait],
     impls: ~[Impl],
+    view_items: ~[ViewItem],
 }
 
 impl Clean<Module> for doctree::Module {
@@ -84,16 +91,17 @@ impl Clean<Module> for doctree::Module {
             ~""
         };
         Module {
-            name: name,
-            attrs: self.attrs.clean(),
-            structs: self.structs.clean(),
-            enums: self.enums.clean(),
-            fns: self.fns.clean(),
-            mods: self.mods.clean(),
-            typedefs: self.typedefs.clean(),
-            statics: self.statics.clean(),
-            traits: self.traits.clean(),
-            impls: self.impls.clean(),
+            name       : name,
+            attrs      : self.attrs.clean(),
+            structs    : self.structs.clean(),
+            enums      : self.enums.clean(),
+            fns        : self.fns.clean(),
+            mods       : self.mods.clean(),
+            typedefs   : self.typedefs.clean(),
+            statics    : self.statics.clean(),
+            traits     : self.traits.clean(),
+            impls      : self.impls.clean(),
+            view_items : self.view_items.clean(),
         }
     }
 }
@@ -117,9 +125,9 @@ impl Clean<Attribute> for ast::MetaItem_ {
     }
 }
 
-impl Clean<Attribute> for ast::Attribute {
+impl Clean<Attribute> for ast::Attribute_ {
     pub fn clean(&self) -> Attribute {
-        self.node.value.node.clean()
+        self.value.clean()
     }
 }
 
@@ -304,9 +312,9 @@ pub enum SelfTy {
     SelfOwned,
 }
 
-impl Clean<SelfTy> for ast::explicit_self {
+impl Clean<SelfTy> for ast::explicit_self_ {
     pub fn clean(&self) -> SelfTy {
-        match self.node {
+        match *self {
             ast::sty_static => SelfStatic,
             ast::sty_value => SelfValue,
             ast::sty_uniq => SelfOwned,
@@ -836,6 +844,63 @@ impl Clean<Impl> for doctree::Impl {
             attrs: self.attrs.clean(),
             where: self.where.clean(),
         }
+    }
+}
+
+pub struct ViewItem {
+    attrs: ~[Attribute],
+    where: ~str,
+    vis: Visibility,
+    inner: ViewItemInner
+}
+
+impl Clean<ViewItem> for ast::view_item {
+    pub fn clean(&self) -> ViewItem {
+        ViewItem {
+            attrs: self.attrs.clean(),
+            where: self.span.clean(),
+            vis: self.vis,
+            inner: self.node.clean()
+        }
+    }
+}
+
+pub enum ViewItemInner {
+    ExternMod(~str, ~[Attribute], ast::NodeId),
+    Import(~[ViewPath])
+}
+
+impl Clean<ViewItemInner> for ast::view_item_ {
+    pub fn clean(&self) -> ViewItemInner {
+        match self {
+            &ast::view_item_extern_mod(ref i, ref mi, ref id) =>
+                ExternMod(i.clean(), mi.clean(), *id),
+            &ast::view_item_use(ref vp) => Import(vp.clean())
+        }
+    }
+}
+
+pub enum ViewPath {
+    SimpleImport(~str, ~str, ast::NodeId),
+    GlobImport(~str, ast::NodeId),
+    ImportList(~str, ~[ViewListIdent], ast::NodeId)
+}
+
+impl Clean<ViewPath> for ast::view_path_ {
+    pub fn clean(&self) -> ViewPath {
+        match self {
+            &ast::view_path_simple(ref i, ref p, ref id) => SimpleImport(i.clean(), p.clean(), *id),
+            &ast::view_path_glob(ref p, ref id) => GlobImport(p.clean(), *id),
+            &ast::view_path_list(ref p, ref pl, ref id) => ImportList(p.clean(), pl.clean(), *id),
+        }
+    }
+}
+
+pub type ViewListIdent = ~str;
+
+impl Clean<ViewListIdent> for ast::path_list_ident_ {
+    pub fn clean(&self) -> ViewListIdent {
+        self.name.clean()
     }
 }
 
