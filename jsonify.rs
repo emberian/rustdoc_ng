@@ -21,13 +21,14 @@ impl ToJson for clean::Module {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"name", self.name.to_json());
-        o.insert(~"mods", self.mods.to_json());
-        o.insert(~"structs", self.structs.to_json());
-        o.insert(~"fns", self.fns.to_json());
-        o.insert(~"enums", self.enums.to_json());
         o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"typedefs", self.typedefs.to_json());
+        o.insert(~"mods", self.mods.to_json());
+        o.insert(~"traits", self.traits.to_json());
+        o.insert(~"structs", self.structs.to_json());
+        o.insert(~"enums", self.enums.to_json());
+        o.insert(~"fns", self.fns.to_json());
         o.insert(~"statics", self.statics.to_json());
+        o.insert(~"typedefs", self.typedefs.to_json());
         Object(o)
     }
 }
@@ -166,16 +167,18 @@ impl ToJson for clean::Trait {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"name", self.name.to_json());
-        o.insert(~"methods", self.methods.to_json());
-        o.insert(~"lifetimes", self.lifetimes.to_json());
+        o.insert(~"required_methods",
+                 self.methods.iter().filter(|x| x.is_req()).transform(|x| x.clone())
+                 .to_owned_vec().to_json());
+        o.insert(~"default_methods",
+                 self.methods.iter().filter(|x| x.is_def()).transform(|x| x.clone())
+                 .to_owned_vec().to_json());
         o.insert(~"generics", self.generics.to_json());
+        o.insert(~"source", self.where.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"parents", self.parents.to_json());
+        o.insert(~"id", self.id.to_json());
         Object(o)
-    }
-}
-
-impl ToJson for clean::Method { //TODO method is a stub right now
-    pub fn to_json(&self) -> Json {
-        String(~"method placeholder")
     }
 }
 
@@ -331,6 +334,80 @@ impl ToJson for clean::Static {
         o.insert(~"mutability", self.mutability.to_str().to_json());
         o.insert(~"expr", self.expr.to_json());
         o.insert(~"attrs", self.attrs.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::TraitRef {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"path", self.path.to_json());
+        o.insert(~"id", self.id.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::TraitMethod {
+    pub fn to_json(&self) -> Json {
+        match self {
+            &clean::Required(ref m) => m.to_json(),
+            &clean::Provided(ref m) => m.to_json(),
+        }
+    }
+}
+
+impl ToJson for clean::Method { //TODO method is a stub right now
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        o.insert(~"self", self.self_.to_json());
+        o.insert(~"decl", self.decl.to_json());
+        o.insert(~"source", self.where.to_json());
+        o.insert(~"visibility", String(match self.vis {
+            ast::public => ~"public",
+            ast::private => ~"private",
+            ast::inherited => ~"inherited"
+        }));
+        o.insert(~"purity", self.purity.to_str().to_json());
+        o.insert(~"id", self.id.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::TyMethod { //TODO method is a stub right now
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"name", self.name.to_json());
+        o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"generics", self.generics.to_json());
+        o.insert(~"self", self.self_.to_json());
+        o.insert(~"decl", self.decl.to_json());
+        o.insert(~"source", self.where.to_json());
+        o.insert(~"purity", self.purity.to_str().to_json());
+        o.insert(~"id", self.id.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::SelfTy {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        match self {
+            &clean::SelfStatic => { o.insert(~"type", (~"static").to_json()); },
+            &clean::SelfValue => { o.insert(~"type", (~"value").to_json()); },
+            &clean::SelfOwned => { o.insert(~"type", (~"owned").to_json()); },
+            &clean::SelfBorrowed(ref lt, ref mut_) => {
+                o.insert(~"type", (~"borrowed").to_json());
+                o.insert(~"lifetime", lt.to_json());
+                o.insert(~"mutability", mut_.to_str().to_json());
+            },
+            &clean::SelfManaged(ref mut_) => {
+                o.insert(~"type", (~"managed").to_json());
+                o.insert(~"mutability", mut_.to_str().to_json());
+            }
+        }
         Object(o)
     }
 }

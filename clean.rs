@@ -67,6 +67,7 @@ pub struct Module {
     mods: ~[Module],
     typedefs: ~[Typedef],
     statics: ~[Static],
+    traits: ~[Trait],
 }
 
 impl Clean<Module> for doctree::Module {
@@ -85,6 +86,7 @@ impl Clean<Module> for doctree::Module {
             mods: self.mods.clean(),
             typedefs: self.typedefs.clean(),
             statics: self.statics.clean(),
+            traits: self.traits.clean(),
         }
     }
 }
@@ -133,7 +135,7 @@ impl Clean<TyParam> for ast::TyParam {
 
 pub enum TyParamBound {
     RegionBound,
-    TraitBound(Trait)
+    TraitBound(TraitRef)
 }
 
 #[doc = "Automatically derived."]
@@ -150,7 +152,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     pub fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
-            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
+            ast::TraitTyParamBound(ref t) => TraitBound(t.clean()),
         }
     }
 }
@@ -190,43 +192,104 @@ impl Clean<Generics> for ast::Generics {
 }
 
 pub struct Method {
-    ident: ~str,
+    name: ~str,
     attrs: ~[Attribute],
     generics: Generics,
-    //explicit_self: ExplicitSelf,
+    self_: SelfTy,
+    purity: ast::purity,
+    decl: FnDecl,
+    where: ~str,
     id: ast::NodeId,
-    vis: Visibility
+    vis: Visibility,
 }
 
 impl ::std::clone::Clone for Method {
-    pub fn clone(&self) -> Method {
-        match *self {
-            Method{ident: ref __self_0_0,
-            attrs: ref __self_0_1,
-            generics: ref __self_0_2,
-            id: ref __self_0_3,
-            vis: ref __self_0_4} =>
-                Method{ident: __self_0_0.clone(),
-                attrs: __self_0_1.clone(),
-                generics: (*__self_0_2).clone(),
-                id: __self_0_3.clone(),
-                vis: __self_0_4.clone(),}
+     pub fn clone(&self) -> Method {
+         match *self {
+             Method{name: ref __self_0_0,
+                    attrs: ref __self_0_1,
+                    generics: ref __self_0_2,
+                    self_: ref __self_0_3,
+                    purity: ref __self_0_4,
+                    decl: ref __self_0_5,
+                    where: ref __self_0_6,
+                    id: ref __self_0_7,
+                    vis: ref __self_0_8} =>
+             Method{name: __self_0_0.clone(),
+                    attrs: __self_0_1.clone(),
+                    generics: __self_0_2.clone(),
+                    self_: (*__self_0_3).clone(),
+                    purity: __self_0_4.clone(),
+                    decl: __self_0_5.clone(),
+                    where: __self_0_6.clone(),
+                    id: __self_0_7.clone(),
+                    vis: __self_0_8.clone(),}
+         }
+     }
+ }
+
+impl Clean<Method> for ast::method {
+    pub fn clean(&self) -> Method {
+        Method {
+            name: self.ident.clean(),
+            attrs: self.attrs.clean(),
+            generics: self.generics.clean(),
+            self_: self.explicit_self.clean(),
+            purity: self.purity.clone(),
+            decl: self.decl.clean(),
+            where: self.span.clean(),
+            id: self.self_id.clone(),
+            vis: self.vis,
         }
     }
 }
 
-
+#[deriving(Clone)]
 pub struct TyMethod {
-    ident: ~str,
+    name: ~str,
     attrs: ~[Attribute],
+    purity: ast::purity,
+    decl: FnDecl,
     generics: Generics,
     id: ast::NodeId,
-
+    self_: SelfTy,
+    where: ~str
 }
 
-pub enum TraitMethod {
-    Required(TyMethod),
-    Provided(Method)
+impl Clean<TyMethod> for ast::TypeMethod {
+    pub fn clean(&self) -> TyMethod {
+        TyMethod {
+            name: self.ident.clean(),
+            attrs: self.attrs.clean(),
+            purity: self.purity.clone(),
+            decl: self.decl.clean(),
+            self_: self.explicit_self.clean(),
+            generics: self.generics.clean(),
+            id: self.id,
+            where: self.span.clean()
+        }
+    }
+}
+
+#[deriving(Clone)]
+pub enum SelfTy {
+    SelfStatic,
+    SelfValue,
+    SelfBorrowed(Option<Lifetime>, Mutability),
+    SelfManaged(Mutability),
+    SelfOwned,
+}
+
+impl Clean<SelfTy> for ast::explicit_self {
+    pub fn clean(&self) -> SelfTy {
+        match self.node {
+            ast::sty_static => SelfStatic,
+            ast::sty_value => SelfValue,
+            ast::sty_uniq => SelfOwned,
+            ast::sty_region(lt, mt) => SelfBorrowed(lt.clean(), mt.clean()),
+            ast::sty_box(mt) => SelfManaged(mt.clean()),
+        }
+    }
 }
 
 pub struct Function {
@@ -352,18 +415,77 @@ impl Clean<RetStyle> for ast::ret_style {
 #[deriving(Clone)]
 pub struct Trait {
     name: ~str,
-    methods: ~[Method], //should be TraitMethod
-    lifetimes: ~[Lifetime],
-    generics: Generics
+    methods: ~[TraitMethod],
+    generics: Generics,
+    where: ~str,
+    attrs: ~[Attribute],
+    parents: ~[TraitRef],
+    id: ast::NodeId,
 }
 
-impl Trait {
-    pub fn new() -> Trait {
+impl Clean<Trait> for doctree::Trait {
+    pub fn clean(&self) -> Trait {
         Trait {
-            name: ~"",
-            methods: ~[],
-            lifetimes: ~[],
-            generics: Generics::new()
+            name: self.name.clean(),
+            methods: self.methods.clean(),
+            generics: self.generics.clean(),
+            parents: self.parents.clean(),
+            where: self.where.clean(),
+            attrs: self.attrs.clean(),
+            id: self.id
+        }
+    }
+}
+
+#[deriving(Clone)]
+pub struct TraitRef {
+    path: ~str,
+    id: ast::NodeId,
+}
+
+impl Clean<TraitRef> for ast::trait_ref {
+    pub fn clean(&self) -> TraitRef {
+        TraitRef {
+            path: self.path.clean(),
+            id: self.ref_id,
+        }
+    }
+}
+
+pub enum TraitMethod {
+    Required(TyMethod),
+    Provided(Method),
+}
+
+impl TraitMethod {
+    pub fn is_req(&self) -> bool {
+        match self {
+            &Required(*) => true,
+            _ => false,
+        }
+    }
+    pub fn is_def(&self) -> bool {
+        match self {
+            &Provided(*) => true,
+            _ => false,
+        }
+    }
+}
+#[doc = "Automatically derived."]
+impl ::std::clone::Clone for TraitMethod {
+    pub fn clone(&self) -> TraitMethod {
+        match *self {
+            Required(ref __self_0) => Required((*__self_0).clone()),
+            Provided(ref __self_0) => Provided(__self_0.clone())
+        }
+    }
+}
+
+impl Clean<TraitMethod> for ast::trait_method {
+    pub fn clean(&self) -> TraitMethod {
+        match self {
+            &ast::required(ref t) => Required(t.clean()),
+            &ast::provided(ref t) => Provided(t.clean()),
         }
     }
 }

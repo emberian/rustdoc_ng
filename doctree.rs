@@ -12,6 +12,7 @@ pub struct Module { name: Option<ident>,
     mods: ~[Module],
     typedefs: ~[Typedef],
     statics: ~[Static],
+    traits: ~[Trait],
 }
 
 impl Module {
@@ -25,6 +26,7 @@ impl Module {
             mods: ~[],
             typedefs: ~[],
             statics: ~[],
+            traits: ~[],
         }
     }
 }
@@ -122,6 +124,16 @@ pub struct Static {
     expr: @ast::expr,
     name: ast::ident,
     attrs: ~[ast::Attribute],
+    where: span,
+}
+
+pub struct Trait {
+    name: ast::ident,
+    methods: ~[ast::trait_method], //should be TraitMethod
+    generics: ast::Generics,
+    parents: ~[ast::trait_ref],
+    attrs: ~[ast::Attribute],
+    id: ast::NodeId,
     where: span,
 }
 

@@ -135,6 +135,18 @@ impl RustdocVisitor {
                     };
                     om.statics.push(s);
                 },
+                ast::item_trait(ref gen, ref tr, ref met) => {
+                    let t = Trait {
+                        name: item.ident,
+                        methods: met.clone(),
+                        generics: gen.clone(),
+                        parents: tr.clone(),
+                        id: item.id,
+                        attrs: item.attrs.clone(),
+                        where: item.span
+                    };
+                    om.traits.push(t);
+                },
                 _ => (),
             }
         }
@@ -142,4 +154,3 @@ impl RustdocVisitor {
         visit_mod(&crate.module, crate.span, ast::CRATE_NODE_ID, self);
     }
 }
-
