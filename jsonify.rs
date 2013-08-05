@@ -24,6 +24,7 @@ impl ToJson for clean::Module {
         o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"mods", self.mods.to_json());
         o.insert(~"traits", self.traits.to_json());
+        o.insert(~"impls", self.impls.to_json());
         o.insert(~"structs", self.structs.to_json());
         o.insert(~"enums", self.enums.to_json());
         o.insert(~"fns", self.fns.to_json());
@@ -106,7 +107,10 @@ impl ToJson for clean::Type {
             &Generic(n) => (~"generic", n.to_json()),
             &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
-                              ast::ty_int(t) => t.to_str().to_json(),
+                              ast::ty_int(t) => match t.to_str() {
+                                  ~"" => ~"i",
+                                  x   => x
+                              }.to_json(),
                               ast::ty_uint(t) => t.to_str().to_json(),
                               ast::ty_float(t) => t.to_str().to_json(),
                               _ => fail!("non-numeric primitive survived to jsonification"),
@@ -408,6 +412,17 @@ impl ToJson for clean::SelfTy {
                 o.insert(~"mutability", mut_.to_str().to_json());
             }
         }
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Impl {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"generics", self.generics.to_json());
+        o.insert(~"trait", self.trait_.to_json());
+        o.insert(~"for", self.for_.to_json());
+        o.insert(~"methods", self.methods.to_json());
         Object(o)
     }
 }

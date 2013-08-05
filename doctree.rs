@@ -4,7 +4,8 @@ use syntax::codemap::span;
 use syntax::ast;
 use syntax::ast::{ident, NodeId};
 
-pub struct Module { name: Option<ident>,
+pub struct Module {
+    name: Option<ident>,
     attrs: ~[ast::Attribute],
     structs: ~[Struct],
     enums: ~[Enum],
@@ -13,6 +14,7 @@ pub struct Module { name: Option<ident>,
     typedefs: ~[Typedef],
     statics: ~[Static],
     traits: ~[Trait],
+    impls: ~[Impl],
 }
 
 impl Module {
@@ -27,6 +29,7 @@ impl Module {
             typedefs: ~[],
             statics: ~[],
             traits: ~[],
+            impls: ~[],
         }
     }
 }
@@ -134,6 +137,15 @@ pub struct Trait {
     parents: ~[ast::trait_ref],
     attrs: ~[ast::Attribute],
     id: ast::NodeId,
+    where: span,
+}
+
+pub struct Impl {
+    generics: ast::Generics,
+    trait_: Option<ast::trait_ref>,
+    for_: ast::Ty,
+    methods: ~[@ast::method],
+    attrs: ~[ast::Attribute],
     where: span,
 }
 

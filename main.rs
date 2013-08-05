@@ -12,6 +12,7 @@ extern mod rustc;
 
 extern mod extra;
 
+use std::cell::Cell;
 use extra::json::ToJson;
 
 pub mod core;
@@ -47,7 +48,7 @@ fn main() {
         return;
     }
 
-    let libs = opt_strs(&matches, "L").map(|s| Path(*s));
+    let libs = Cell::new(opt_strs(&matches, "L").map(|s| Path(*s)));
 
     let mut passes = if opt_present(&matches, "n") {
         ~[]
@@ -62,9 +63,9 @@ fn main() {
         return;
     }
 
-    let cratepath = Path(matches.free[0]);
+    let cr = Cell::new(Path(matches.free[0]));
 
-    let mut crate = core::run_core(libs, &cratepath);
+    let mut crate = std::task::try(|| {let cr = cr.take(); core::run_core(libs.take(), &cr)}).unwrap();
     let mut json = match crate.to_json() {
         extra::json::Object(o) => o,
         _ => fail!("JSON returned was not an object")

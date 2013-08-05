@@ -147,6 +147,17 @@ impl RustdocVisitor {
                     };
                     om.traits.push(t);
                 },
+                ast::item_impl(ref gen, ref tr, ref ty, ref meths) => {
+                    let i = Impl {
+                        generics: gen.clone(),
+                        trait_: tr.clone(),
+                        for_: ty.clone(),
+                        methods: meths.clone(),
+                        attrs: item.attrs.clone(),
+                        where: item.span,
+                    };
+                    om.impls.push(i);
+                },
                 _ => (),
             }
         }

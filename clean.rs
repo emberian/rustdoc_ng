@@ -17,6 +17,11 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
         self.iter().transform(|x| x.clean()).collect()
     }
 }
+impl<T: Clean<U>, U> Clean<U> for @T {
+    pub fn clean(&self) -> U {
+        (**self).clean()
+    }
+}
 
 impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
     pub fn clean(&self) -> Option<U> {
@@ -68,6 +73,7 @@ pub struct Module {
     typedefs: ~[Typedef],
     statics: ~[Static],
     traits: ~[Trait],
+    impls: ~[Impl],
 }
 
 impl Clean<Module> for doctree::Module {
@@ -87,6 +93,7 @@ impl Clean<Module> for doctree::Module {
             typedefs: self.typedefs.clean(),
             statics: self.statics.clean(),
             traits: self.traits.clean(),
+            impls: self.impls.clean(),
         }
     }
 }
@@ -244,6 +251,23 @@ impl Clean<Method> for ast::method {
     }
 }
 
+#[cfg(ignore)]
+impl Clean<Method> for @ast::method {
+    pub fn clean(&self) -> Method {
+        Method {
+            name: self.ident.clean(),
+            attrs: self.attrs.clean(),
+            generics: self.generics.clean(),
+            self_: self.explicit_self.clean(),
+            purity: self.purity.clone(),
+            decl: self.decl.clean(),
+            where: self.span.clean(),
+            id: self.self_id.clone(),
+            vis: self.vis,
+        }
+    }
+}
+
 #[deriving(Clone)]
 pub struct TyMethod {
     name: ~str,
@@ -347,7 +371,7 @@ impl Clean<ClosureDecl> for ast::TyClosure {
 
 pub struct FnDecl {
     inputs: ~[Argument],
-    output: @Type,
+    output: Type,
     cf: RetStyle,
     attrs: ~[Attribute]
 }
@@ -373,7 +397,7 @@ impl Clean<FnDecl> for ast::fn_decl {
     pub fn clean(&self) -> FnDecl {
         FnDecl {
             inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
-            output: @(self.output.clean()),
+            output: (self.output.clean()),
             cf: self.cf.clean(),
             attrs: ~[]
         }
@@ -382,7 +406,7 @@ impl Clean<FnDecl> for ast::fn_decl {
 
 #[deriving(Clone)]
 pub struct Argument {
-    ty: @Type,
+    ty: Type,
     name: ~str,
     id: ast::NodeId
 }
@@ -391,7 +415,7 @@ impl Clean<Argument> for ast::arg {
     pub fn clean(&self) -> Argument {
         Argument {
             name: name_from_pat(self.pat),
-            ty: @(self.ty.clean()),
+            ty: (self.ty.clean()),
             id: self.id
         }
     }
@@ -788,6 +812,29 @@ impl Clean<Mutability> for ast::mutability {
             &ast::m_mutbl => Mutable,
             &ast::m_imm => Immutable,
             &ast::m_const => Const
+        }
+    }
+}
+
+#[deriving(Clone)]
+pub struct Impl {
+    generics: Generics,
+    trait_: Option<TraitRef>,
+    for_: Type,
+    methods: ~[Method],
+    attrs: ~[Attribute],
+    where: ~str,
+}
+
+impl Clean<Impl> for doctree::Impl {
+    pub fn clean(&self) -> Impl {
+        Impl {
+            generics: self.generics.clean(),
+            trait_: self.trait_.clean(),
+            for_: self.for_.clean(),
+            methods: self.methods.clean(),
+            attrs: self.attrs.clean(),
+            where: self.where.clean(),
         }
     }
 }
