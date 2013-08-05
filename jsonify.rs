@@ -9,7 +9,7 @@ use clean;
 impl ToJson for clean::Crate {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"schema", String(~"0.4.0"));
+        o.insert(~"schema", String(~"0.5.0"));
         o.insert(~"name", self.name.to_json());
         o.insert(~"mods", self.mods.to_json());
         o.insert(~"attrs", self.attrs.to_json());
@@ -105,9 +105,9 @@ impl ToJson for clean::Type {
             &Generic(n) => (~"generic", n.to_json()),
             &Self(n) => (~"self", n.to_json()),
             &Primitive(p) => (~"primitive", match p {
-                              ast::ty_int(_) => extra::json::String(~"int"),
-                              ast::ty_uint(_) => extra::json::String(~"uint"),
-                              ast::ty_float(_) => extra::json::String(~"float"),
+                              ast::ty_int(t) => t.to_str().to_json(),
+                              ast::ty_uint(t) => t.to_str().to_json(),
+                              ast::ty_float(t) => t.to_str().to_json(),
                               _ => fail!("non-numeric primitive survived to jsonification"),
                               }
                              ),
@@ -115,6 +115,8 @@ impl ToJson for clean::Type {
             &BareFunction(ref b) => (~"barefn", b.to_json()),
             &Unique(ref t) => (~"unique", t.to_json()),
             &Managed(ref t) => (~"managed", t.to_json()),
+            &RawPointer(ref t) => (~"unsafe_pointer", t.to_json()),
+            &BorrowedRef(ref t) => (~"borrowed", t.to_json()),
             &Tuple(ref t) => (~"tuple", t.to_json()),
             &Vector(ref t) => (~"vector", t.to_json()),
             &String => (~"string", extra::json::String(~"")),
@@ -314,7 +316,7 @@ impl ToJson for clean::BareFunctionDecl {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"purity", self.purity.to_str().to_json());
-        o.insert(~"lifetimes", self.lifetimes.to_json());
+        o.insert(~"generics", self.generics.to_json());
         o.insert(~"decl", self.decl.to_json());
         o.insert(~"abi", self.abi.to_json());
         Object(o)

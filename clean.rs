@@ -388,7 +388,7 @@ pub enum Type {
     /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
     Closure(~ClosureDecl),
-    // I have no idea what this is
+    /// extern "ABI" fn
     BareFunction(~BareFunctionDecl),
     Tuple(~[Type]),
     Vector(~Type),
@@ -400,6 +400,8 @@ pub enum Type {
     Bottom,
     Unique(~Type),
     Managed(~Type),
+    RawPointer(~Type),
+    BorrowedRef(~Type),
     // region, raw, other boxes, mutable
 }
 
@@ -411,7 +413,8 @@ impl Clean<Type> for ast::Ty {
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let t = match self.node {
             ty_nil => Unit,
-            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
+            ty_ptr(ref m) =>  RawPointer(~resolve_type(&m.ty.clean())),
+            ty_rptr(_, ref m) => BorrowedRef(~resolve_type(&m.ty.clean())),
             ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
             ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
             ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
@@ -605,7 +608,7 @@ impl Clean<Typedef> for doctree::Typedef {
 #[deriving(Clone)]
 pub struct BareFunctionDecl {
     purity: ast::purity,
-    lifetimes: ~[Lifetime],
+    generics: Generics,
     decl: FnDecl,
     abi: ~str
 }
@@ -614,7 +617,10 @@ impl Clean<BareFunctionDecl> for ast::TyBareFn {
     pub fn clean(&self) -> BareFunctionDecl {
         BareFunctionDecl {
             purity: self.purity,
-            lifetimes: self.lifetimes.clean(),
+            generics: Generics {
+                lifetimes: self.lifetimes.clean(),
+                type_params: ~[],
+            },
             decl: self.decl.clean(),
             abi: self.abis.to_str(),
         }
