@@ -1040,7 +1040,12 @@ fn resolve_type(t: &Type) -> Type {
                                 def_prim_ty(p) => match p {
                                     ty_str => ~"str",
                                     ty_bool => ~"bool",
-                                    _ => Primitive(p).to_json().to_str(),
+                                    ty_int(t) => match t.to_str() {
+                                        ~"" => ~"i",
+                                        s => s
+                                    },
+                                    ty_uint(t) => t.to_str(),
+                                    ty_float(t) => t.to_str()
                                 },
                                 def_ty_param(*) => ~"generic",
                                 def_struct(*) => ~"struct",

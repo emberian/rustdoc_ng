@@ -13,13 +13,11 @@ extern mod rustc;
 extern mod extra;
 
 use std::cell::Cell;
-use extra::json::ToJson;
 use extra::serialize::Encodable;
 
 pub mod core;
 pub mod doctree;
 pub mod clean;
-pub mod jsonify;
 pub mod visit_ast;
 pub mod plugins;
 mod passes;
