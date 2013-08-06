@@ -44,6 +44,7 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
     }
 }
 
+#[deriving(Clone)]
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
@@ -79,6 +80,7 @@ pub struct Item<T> {
     inner: T,
 }
 
+#[deriving(Clone)]
 pub struct Module {
     structs: ~[Item<Struct>],
     enums: ~[Item<Enum>],
@@ -157,19 +159,10 @@ impl Clean<TyParam> for ast::TyParam {
     }
 }
 
+#[deriving(Clone)]
 pub enum TyParamBound {
     RegionBound,
     TraitBound(TraitRef)
-}
-
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for TyParamBound {
-    pub fn clone(&self) -> TyParamBound {
-        match *self {
-            RegionBound => RegionBound,
-            TraitBound(ref __self_0) => TraitBound((*__self_0).clone())
-        }
-    }
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
@@ -290,6 +283,7 @@ impl Clean<SelfTy> for ast::explicit_self {
     }
 }
 
+#[deriving(Clone)]
 pub struct Function {
     decl: FnDecl,
     visibility: Visibility,
@@ -342,28 +336,12 @@ impl Clean<ClosureDecl> for ast::TyClosure {
     }
 }
 
+#[deriving(Clone)]
 pub struct FnDecl {
     inputs: ~[Argument],
     output: Type,
     cf: RetStyle,
     attrs: ~[Attribute]
-}
-
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for FnDecl {
-    pub fn clone(&self) -> FnDecl {
-        match *self {
-            FnDecl{inputs: ref __self_0_0,
-            output: ref __self_0_1,
-            cf: ref __self_0_2,
-            attrs: ref __self_0_3} => FnDecl{
-                inputs: __self_0_0.clone(),
-                output: __self_0_1.clone(),
-                cf: (*__self_0_2).clone(),
-                attrs: __self_0_3.clone(),
-            }
-        }
-    }
 }
 
 impl Clean<FnDecl> for ast::fn_decl {
@@ -539,6 +517,7 @@ impl Clean<Type> for ast::Ty {
     }
 }
 
+#[deriving(Clone)]
 pub struct StructField {
     type_: Type,
     visibility: Option<Visibility>,
@@ -564,6 +543,7 @@ impl Clean<Item<StructField>> for ast::struct_field {
 
 pub type Visibility = ast::visibility;
 
+#[deriving(Clone)]
 pub struct Struct {
     node: ast::NodeId,
     struct_type: doctree::StructType,
@@ -590,6 +570,7 @@ impl Clean<Item<Struct>> for doctree::Struct {
 /// This is a more limited form of the standard Struct, different in that it
 /// it lacks the things most items have (name, id, parameterization). Found
 /// only as a variant in an enum.
+#[deriving(Clone)]
 pub struct VariantStruct {
     struct_type: doctree::StructType,
     fields: ~[Item<StructField>],
@@ -604,6 +585,7 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
     }
 }
 
+#[deriving(Clone)]
 pub struct Enum {
     variants: ~[Item<Variant>],
     generics: Generics,
@@ -625,6 +607,7 @@ impl Clean<Item<Enum>> for doctree::Enum {
     }
 }
 
+#[deriving(Clone)]
 pub struct Variant {
     kind: VariantKind,
     visibility: Visibility,
@@ -644,6 +627,7 @@ impl Clean<Item<Variant>> for doctree::Variant {
     }
 }
 
+#[deriving(Clone)]
 pub enum VariantKind {
     CLikeVariant,
     TupleVariant(~[Type]),
@@ -711,6 +695,7 @@ impl Clean<~str> for ast::ident {
     }
 }
 
+#[deriving(Clone)]
 pub struct Typedef {
     type_: Type,
     generics: Generics,
@@ -754,6 +739,7 @@ impl Clean<BareFunctionDecl> for ast::TyBareFn {
     }
 }
 
+#[deriving(Clone)]
 pub struct Static {
     type_: Type,
     mutability: Mutability,
@@ -820,6 +806,7 @@ impl Clean<Item<Impl>> for doctree::Impl {
     }
 }
 
+#[deriving(Clone)]
 pub struct ViewItem {
     vis: Visibility,
     inner: ViewItemInner
@@ -839,6 +826,7 @@ impl Clean<Item<ViewItem>> for ast::view_item {
     }
 }
 
+#[deriving(Clone)]
 pub enum ViewItemInner {
     ExternMod(~str, ~[Attribute], ast::NodeId),
     Import(~[ViewPath])
@@ -854,6 +842,7 @@ impl Clean<ViewItemInner> for ast::view_item_ {
     }
 }
 
+#[deriving(Clone)]
 pub enum ViewPath {
     SimpleImport(~str, Path, ast::NodeId),
     GlobImport(Path, ast::NodeId),
@@ -1045,7 +1034,7 @@ fn resolve_type(t: &Type) -> Type {
                             debug!("found external def: %?", di);
                             path = pathstr.to_owned();
                             ty = match di {
-                                def_fn(*) => ~"fn", 
+                                def_fn(*) => ~"fn",
                                 def_ty(*) => ~"enum",
                                 def_trait(*) => ~"trait",
                                 def_prim_ty(p) => match p {
