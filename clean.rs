@@ -44,7 +44,7 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
@@ -70,7 +70,7 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
 /// Anything with a source location and set of attributes and, optionally, a
 /// name. That is, anything that can be documented. This doesn't correspond
 /// directly to the AST's concept of an item; it's a strict superset.
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Item<T> {
     /// Stringified span
     where: ~str,
@@ -80,7 +80,7 @@ pub struct Item<T> {
     inner: T,
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Module {
     structs: ~[Item<Struct>],
     enums: ~[Item<Enum>],
@@ -119,7 +119,7 @@ impl Clean<Item<Module>> for doctree::Module {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Attribute {
     Word(~str),
     List(~str, ~[Attribute]),
@@ -142,7 +142,7 @@ impl Clean<Attribute> for ast::Attribute {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TyParam {
     name: ~str,
     node: ast::NodeId,
@@ -159,7 +159,7 @@ impl Clean<TyParam> for ast::TyParam {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum TyParamBound {
     RegionBound,
     TraitBound(TraitRef)
@@ -174,7 +174,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
@@ -184,7 +184,7 @@ impl Clean<Lifetime> for ast::Lifetime {
 }
 
 // maybe use a Generic enum and use ~[Generic]?
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Generics {
     lifetimes: ~[Lifetime],
     type_params: ~[TyParam]
@@ -208,7 +208,7 @@ impl Clean<Generics> for ast::Generics {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Method {
     generics: Generics,
     self_: SelfTy,
@@ -236,7 +236,7 @@ impl Clean<Item<Method>> for ast::method {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TyMethod {
     purity: ast::purity,
     decl: FnDecl,
@@ -262,7 +262,7 @@ impl Clean<Item<TyMethod>> for ast::TypeMethod {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum SelfTy {
     SelfStatic,
     SelfValue,
@@ -283,7 +283,7 @@ impl Clean<SelfTy> for ast::explicit_self {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Function {
     decl: FnDecl,
     visibility: Visibility,
@@ -308,7 +308,7 @@ impl Clean<Item<Function>> for doctree::Function {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct ClosureDecl {
     sigil: ast::Sigil,
     region: Option<Lifetime>,
@@ -336,7 +336,7 @@ impl Clean<ClosureDecl> for ast::TyClosure {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct FnDecl {
     inputs: ~[Argument],
     output: Type,
@@ -355,7 +355,7 @@ impl Clean<FnDecl> for ast::fn_decl {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Argument {
     ty: Type,
     name: ~str,
@@ -372,7 +372,7 @@ impl Clean<Argument> for ast::arg {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum RetStyle {
     NoReturn,
     Return
@@ -387,7 +387,7 @@ impl Clean<RetStyle> for ast::ret_style {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Trait {
     methods: ~[TraitMethod],
     generics: Generics,
@@ -411,7 +411,7 @@ impl Clean<Item<Trait>> for doctree::Trait {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TraitRef {
     path: Path,
     id: ast::NodeId,
@@ -426,7 +426,7 @@ impl Clean<TraitRef> for ast::trait_ref {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum TraitMethod {
     Required(Item<TyMethod>),
     Provided(Item<Method>),
@@ -459,7 +459,7 @@ impl Clean<TraitMethod> for ast::trait_method {
 /// A representation of a Type suitable for hyperlinking purposes. Ideally one can get the original
 /// type out of the AST/ty::ctxt given one of these, if more information is needed. Most importantly
 /// it does not preserve mutability or boxes.
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
@@ -517,7 +517,7 @@ impl Clean<Type> for ast::Ty {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct StructField {
     type_: Type,
     visibility: Option<Visibility>,
@@ -543,7 +543,7 @@ impl Clean<Item<StructField>> for ast::struct_field {
 
 pub type Visibility = ast::visibility;
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Struct {
     node: ast::NodeId,
     struct_type: doctree::StructType,
@@ -570,7 +570,7 @@ impl Clean<Item<Struct>> for doctree::Struct {
 /// This is a more limited form of the standard Struct, different in that it
 /// it lacks the things most items have (name, id, parameterization). Found
 /// only as a variant in an enum.
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct VariantStruct {
     struct_type: doctree::StructType,
     fields: ~[Item<StructField>],
@@ -585,7 +585,7 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Enum {
     variants: ~[Item<Variant>],
     generics: Generics,
@@ -607,7 +607,7 @@ impl Clean<Item<Enum>> for doctree::Enum {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Variant {
     kind: VariantKind,
     visibility: Visibility,
@@ -627,7 +627,7 @@ impl Clean<Item<Variant>> for doctree::Variant {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum VariantKind {
     CLikeVariant,
     TupleVariant(~[Type]),
@@ -656,7 +656,7 @@ impl Clean<~str> for syntax::codemap::span {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Path {
     name: ~str,
     lifetime: Option<Lifetime>,
@@ -695,7 +695,7 @@ impl Clean<~str> for ast::ident {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Typedef {
     type_: Type,
     generics: Generics,
@@ -717,7 +717,7 @@ impl Clean<Item<Typedef>> for doctree::Typedef {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct BareFunctionDecl {
     purity: ast::purity,
     generics: Generics,
@@ -739,7 +739,7 @@ impl Clean<BareFunctionDecl> for ast::TyBareFn {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Static {
     type_: Type,
     mutability: Mutability,
@@ -765,7 +765,7 @@ impl Clean<Item<Static>> for doctree::Static {
     }
 }
 
-#[deriving(ToStr, Clone)]
+#[deriving(ToStr, Clone, Encodable, Decodable)]
 pub enum Mutability {
     Mutable,
     Immutable,
@@ -782,7 +782,7 @@ impl Clean<Mutability> for ast::mutability {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Impl {
     generics: Generics,
     trait_: Option<TraitRef>,
@@ -806,7 +806,7 @@ impl Clean<Item<Impl>> for doctree::Impl {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct ViewItem {
     vis: Visibility,
     inner: ViewItemInner
@@ -826,7 +826,7 @@ impl Clean<Item<ViewItem>> for ast::view_item {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum ViewItemInner {
     ExternMod(~str, ~[Attribute], ast::NodeId),
     Import(~[ViewPath])
@@ -842,7 +842,7 @@ impl Clean<ViewItemInner> for ast::view_item_ {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum ViewPath {
     SimpleImport(~str, Path, ast::NodeId),
     GlobImport(Path, ast::NodeId),
