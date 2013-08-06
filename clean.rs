@@ -7,6 +7,7 @@ use rustc::metadata::{csearch,decoder,cstore};
 use syntax;
 use syntax::ast;
 
+use std;
 use doctree;
 use visit_ast;
 use std::local_data;
@@ -48,7 +49,7 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    module: Item,
+    module: Option<Item>,
 }
 
 impl Clean<Crate> for visit_ast::RustdocVisitor {
@@ -61,7 +62,7 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
                 Some(x) => x.to_owned(),
                 None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
             },
-            module: self.module.clean(),
+            module: Some(self.module.clean()),
             attrs: self.attrs.clean(),
         }
     }
@@ -99,15 +100,7 @@ pub enum ItemEnum {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Module {
-    structs: ~[Item],
-    enums: ~[Item],
-    fns: ~[Item],
-    mods: ~[Item],
-    typedefs: ~[Item],
-    statics: ~[Item],
-    traits: ~[Item],
-    impls: ~[Item],
-    view_items: ~[Item],
+    items: ~[Item],
 }
 
 impl Clean<Item> for doctree::Module {
@@ -122,15 +115,11 @@ impl Clean<Item> for doctree::Module {
             attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: ModuleItem(Module {
-                structs    : self.structs.clean(),
-                enums      : self.enums.clean(),
-                fns        : self.fns.clean(),
-                mods       : self.mods.clean(),
-                typedefs   : self.typedefs.clean(),
-                statics    : self.statics.clean(),
-                traits     : self.traits.clean(),
-                impls      : self.impls.clean(),
-                view_items : self.view_items.clean(),
+                items: std::vec::concat(&[self.structs.clean(),
+                              self.enums.clean(), self.fns.clean(),
+                              self.mods.clean(), self.typedefs.clean(),
+                              self.statics.clean(), self.traits.clean(),
+                              self.impls.clean(), self.view_items.clean()])
             })
         }
     }

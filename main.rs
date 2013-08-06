@@ -19,7 +19,7 @@ pub mod core;
 pub mod doctree;
 pub mod clean;
 pub mod visit_ast;
-pub mod visit;
+pub mod fold;
 pub mod plugins;
 mod passes;
 
@@ -67,7 +67,7 @@ fn main() {
 
     let cr = Cell::new(Path(matches.free[0]));
 
-    let mut crate = std::task::try(|| {let cr = cr.take(); core::run_core(libs.take(), &cr)}).unwrap();
+    let crate = std::task::try(|| {let cr = cr.take(); core::run_core(libs.take(), &cr)}).unwrap();
 
     // { "schema": version, "crate": { parsed crate ... }, "plugins": { output of plugins ... }}
     let mut json = ~extra::treemap::TreeMap::new();
@@ -99,7 +99,7 @@ fn main() {
         pm.load_plugin(pname);
     }
 
-    let res = pm.run_plugins(&mut crate);
+    let res = pm.run_plugins(crate);
     let plugins_json = ~res.consume_iter().filter_map(|opt| opt).collect();
 
     json.insert(~"plugins", extra::json::Object(plugins_json));
