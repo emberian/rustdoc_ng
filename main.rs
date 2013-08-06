@@ -19,7 +19,7 @@ pub mod core;
 pub mod doctree;
 pub mod clean;
 pub mod jsonify;
-pub mod visit;
+pub mod visit_ast;
 pub mod plugins;
 mod passes;
 
@@ -41,7 +41,7 @@ fn main() {
         optflag("h", "help", "show this help message"),
     ];
 
-    let matches = getopts(args.tail(), opts).get();
+    let matches = getopts(args.tail(), opts).unwrap();
 
     if opt_present(&matches, "h") || opt_present(&matches, "help") {
         println(usage(args[0], opts));
@@ -73,7 +73,7 @@ fn main() {
 
     let mut pm = plugins::PluginManager::new(Path("/tmp/rustdoc_ng/plugins"));
 
-    foreach pass in passes.iter() {
+    for pass in passes.iter() {
         pm.add_plugin(match pass.as_slice() {
             "strip-hidden" => passes::strip_hidden,
             "clean-comments" => passes::clean_comments,
@@ -86,7 +86,7 @@ fn main() {
     }
 
     let res = pm.run_plugins(&mut crate);
-    foreach result in res.iter() {
+    for result in res.iter() {
         match result {
             &Some((ref s, ref toj)) => { json.insert(s.clone(), toj.to_json()); },
             &None => (),

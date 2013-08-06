@@ -12,16 +12,24 @@ impl ToJson for clean::Crate {
         o.insert(~"schema", String(~"0.5.0"));
         o.insert(~"name", self.name.to_json());
         o.insert(~"mods", self.mods.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }
 }
 
-impl ToJson for clean::Module {
+impl<T: ToJson> ToJson for clean::Item<T> {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"name", self.name.to_json());
+        o.insert(~"source", self.where.to_json());
         o.insert(~"attrs", self.attrs.to_json());
+        o.insert(~"inner", self.inner.to_json());
+        Object(o)
+    }
+}
+        
+impl ToJson for clean::Module {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
         o.insert(~"mods", self.mods.to_json());
         o.insert(~"traits", self.traits.to_json());
         o.insert(~"impls", self.impls.to_json());
@@ -57,12 +65,9 @@ impl ToJson for clean::Struct {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"id", self.node.to_json());
-        o.insert(~"name", String(self.name.clone()));
         o.insert(~"type", self.struct_type.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"fields", self.fields.to_json());
         o.insert(~"generics", self.generics.to_json());
-        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -76,9 +81,7 @@ impl ToJson for doctree::StructType {
 impl ToJson for clean::StructField {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", String(self.name.clone()));
         o.insert(~"type", self.type_.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"visibility", String(match self.visibility {
                                        None => ~"",
                                        Some(v) => match v {
@@ -171,7 +174,6 @@ impl ToJson for clean::TyParamBound {
 impl ToJson for clean::Trait {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", self.name.to_json());
         o.insert(~"required_methods",
                  self.methods.iter().filter(|x| x.is_req()).transform(|x| x.clone())
                  .to_owned_vec().to_json());
@@ -179,8 +181,6 @@ impl ToJson for clean::Trait {
                  self.methods.iter().filter(|x| x.is_def()).transform(|x| x.clone())
                  .to_owned_vec().to_json());
         o.insert(~"generics", self.generics.to_json());
-        o.insert(~"source", self.where.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"parents", self.parents.to_json());
         o.insert(~"id", self.id.to_json());
         Object(o)
@@ -201,10 +201,7 @@ impl ToJson for clean::Enum {
         let mut o = ~TreeMap::new();
         o.insert(~"variants", self.variants.to_json());
         o.insert(~"generics", self.generics.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"name", self.name.to_json());
         o.insert(~"id", self.node.to_json());
-        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -212,8 +209,6 @@ impl ToJson for clean::Enum {
 impl ToJson for clean::Variant {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", String(self.name.clone()));
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"visibility", String(match self.visibility {
             ast::public => ~"public",
             ast::private => ~"private",
@@ -229,6 +224,16 @@ impl ToJson for clean::VariantStruct {
         let mut o = ~TreeMap::new();
         o.insert(~"type", self.struct_type.to_json());
         o.insert(~"fields", self.fields.to_json());
+        Object(o)
+    }
+}
+
+impl ToJson for clean::Path {
+    pub fn to_json(&self) -> Json {
+        let mut o = ~TreeMap::new();
+        o.insert(~"path", self.name.to_json());
+        o.insert(~"lifetime", self.lifetime.to_json());
+        o.insert(~"typarams", self.typarams.to_json());
         Object(o)
     }
 }
@@ -255,11 +260,8 @@ impl ToJson for clean::Function {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
         o.insert(~"id", self.id.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"decl", self.decl.to_json());
-        o.insert(~"source", self.where.to_json());
         o.insert(~"generics", self.generics.to_json());
-        o.insert(~"name", self.name.to_json());
         Object(o)
     }
 }
@@ -310,12 +312,9 @@ impl ToJson for clean::RetStyle {
 impl ToJson for clean::Typedef {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", self.name.to_json());
         o.insert(~"type", self.type_.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"id", self.id.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"source", self.where.to_json());
         Object(o)
     }
 }
@@ -334,11 +333,9 @@ impl ToJson for clean::BareFunctionDecl {
 impl ToJson for clean::Static {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", self.name.to_json());
         o.insert(~"type", self.type_.to_json());
         o.insert(~"mutability", self.mutability.to_str().to_json());
         o.insert(~"expr", self.expr.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         Object(o)
     }
 }
@@ -364,12 +361,9 @@ impl ToJson for clean::TraitMethod {
 impl ToJson for clean::Method { //TODO method is a stub right now
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", self.name.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"self", self.self_.to_json());
         o.insert(~"decl", self.decl.to_json());
-        o.insert(~"source", self.where.to_json());
         o.insert(~"visibility", String(match self.vis {
             ast::public => ~"public",
             ast::private => ~"private",
@@ -384,12 +378,9 @@ impl ToJson for clean::Method { //TODO method is a stub right now
 impl ToJson for clean::TyMethod { //TODO method is a stub right now
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"name", self.name.to_json());
-        o.insert(~"attrs", self.attrs.to_json());
         o.insert(~"generics", self.generics.to_json());
         o.insert(~"self", self.self_.to_json());
         o.insert(~"decl", self.decl.to_json());
-        o.insert(~"source", self.where.to_json());
         o.insert(~"purity", self.purity.to_str().to_json());
         o.insert(~"id", self.id.to_json());
         Object(o)
@@ -431,8 +422,6 @@ impl ToJson for clean::Impl {
 impl ToJson for clean::ViewItem {
     pub fn to_json(&self) -> Json {
         let mut o = ~TreeMap::new();
-        o.insert(~"attrs", self.attrs.to_json());
-        o.insert(~"source", self.where.to_json());
         o.insert(~"visibility", String(match self.vis {
             ast::public => ~"public",
             ast::private => ~"private",
