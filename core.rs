@@ -8,7 +8,7 @@ use syntax::ast;
 use std::os;
 use std::local_data;
 
-use visit::RustdocVisitor;
+use visit_ast::RustdocVisitor;
 use clean;
 use clean::Clean;
 
@@ -28,7 +28,7 @@ fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
 
     let sessopts = @driver::session::options {
         binary: @"rustdoc",
-        maybe_sysroot: Some(@os::self_exe_path().get().pop()),
+        maybe_sysroot: Some(@os::self_exe_path().unwrap().pop()),
         addl_lib_search_paths: @mut libs,
         .. (*rustc::driver::session::basic_options()).clone()
     };

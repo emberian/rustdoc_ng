@@ -1,3 +1,6 @@
+//! This module contains the "cleaned" pieces of the AST, and the functions
+//! that clean them.
+
 use its = syntax::parse::token::ident_to_str;
 
 use rustc::metadata::{csearch,decoder,cstore};
@@ -5,7 +8,7 @@ use syntax;
 use syntax::ast;
 
 use doctree;
-use visit;
+use visit_ast;
 use std::local_data;
 
 pub trait Clean<T> {
@@ -32,12 +35,6 @@ impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
     }
 }
 
-impl<T, U: Clean<T>> Clean<T> for syntax::codemap::spanned<U> {
-    pub fn clean(&self) -> T {
-        self.node.clean()
-    }
-}
-
 impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
     pub fn clean(&self) -> ~[U] {
         match self {
@@ -47,13 +44,14 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    mods: ~[Module],
+    mods: ~[Item<Module>],
 }
 
-impl Clean<Crate> for visit::RustdocVisitor {
+impl Clean<Crate> for visit_ast::RustdocVisitor {
     pub fn clean(&self) -> Crate {
         use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
         let maybe_meta = last_meta_item_value_str_by_name(find_linkage_metas(self.attrs), "name");
@@ -69,69 +67,82 @@ impl Clean<Crate> for visit::RustdocVisitor {
     }
 }
 
-pub struct Module {
-    name: ~str,
+/// Anything with a source location and set of attributes and, optionally, a
+/// name. That is, anything that can be documented. This doesn't correspond
+/// directly to the AST's concept of an item; it's a strict superset.
+#[deriving(Clone, Encodable, Decodable)]
+pub struct Item<T> {
+    /// Stringified span
+    where: ~str,
+    /// Not everything has a name. E.g., impls
+    name: Option<~str>,
     attrs: ~[Attribute],
-    structs: ~[Struct],
-    enums: ~[Enum],
-    fns: ~[Function],
-    mods: ~[Module],
-    typedefs: ~[Typedef],
-    statics: ~[Static],
-    traits: ~[Trait],
-    impls: ~[Impl],
-    view_items: ~[ViewItem],
+    inner: T,
 }
 
-impl Clean<Module> for doctree::Module {
-    pub fn clean(&self) -> Module {
+#[deriving(Clone, Encodable, Decodable)]
+pub struct Module {
+    structs: ~[Item<Struct>],
+    enums: ~[Item<Enum>],
+    fns: ~[Item<Function>],
+    mods: ~[Item<Module>],
+    typedefs: ~[Item<Typedef>],
+    statics: ~[Item<Static>],
+    traits: ~[Item<Trait>],
+    impls: ~[Item<Impl>],
+    view_items: ~[Item<ViewItem>],
+}
+
+impl Clean<Item<Module>> for doctree::Module {
+    pub fn clean(&self) -> Item<Module> {
         let name = if self.name.is_some() {
             self.name.unwrap().clean()
         } else {
             ~""
         };
-        Module {
-            name       : name,
-            attrs      : self.attrs.clean(),
-            structs    : self.structs.clean(),
-            enums      : self.enums.clean(),
-            fns        : self.fns.clean(),
-            mods       : self.mods.clean(),
-            typedefs   : self.typedefs.clean(),
-            statics    : self.statics.clean(),
-            traits     : self.traits.clean(),
-            impls      : self.impls.clean(),
-            view_items : self.view_items.clean(),
+        Item {
+            name: Some(name),
+            attrs: self.attrs.clean(),
+            where: self.where.clean(),
+            inner: Module {
+                structs    : self.structs.clean(),
+                enums      : self.enums.clean(),
+                fns        : self.fns.clean(),
+                mods       : self.mods.clean(),
+                typedefs   : self.typedefs.clean(),
+                statics    : self.statics.clean(),
+                traits     : self.traits.clean(),
+                impls      : self.impls.clean(),
+                view_items : self.view_items.clean(),
+            }
         }
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Attribute {
     Word(~str),
     List(~str, ~[Attribute]),
     NameValue(~str, ~str)
 }
 
-impl Clean<Attribute> for ast::MetaItem_ {
+impl Clean<Attribute> for ast::MetaItem {
     pub fn clean(&self) -> Attribute {
-        match *self {
-            ast::MetaWord(s) => Word(remove_comment_tags(s)),
-            ast::MetaList(ref s, ref l) => List(remove_comment_tags(*s), l.iter()
-                                         .transform(|x| x.node.clean()).collect()),
-            ast::MetaNameValue(s, ref v) => NameValue(remove_comment_tags(s),
-                                         remove_comment_tags(lit_to_str(v)))
+        match self.node {
+            ast::MetaWord(s) => Word(s.to_owned()),
+            ast::MetaList(ref s, ref l) => List(s.to_owned(), l.clean()),
+            ast::MetaNameValue(s, ref v) => NameValue(s.to_owned(), lit_to_str(v))
         }
     }
 }
 
-impl Clean<Attribute> for ast::Attribute_ {
+impl Clean<Attribute> for ast::Attribute {
     pub fn clean(&self) -> Attribute {
-        self.value.clean()
+        self.node.value.clean()
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TyParam {
     name: ~str,
     node: ast::NodeId,
@@ -148,19 +159,10 @@ impl Clean<TyParam> for ast::TyParam {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum TyParamBound {
     RegionBound,
     TraitBound(TraitRef)
-}
-
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for TyParamBound {
-    pub fn clone(&self) -> TyParamBound {
-        match *self {
-            RegionBound => RegionBound,
-            TraitBound(ref __self_0) => TraitBound((*__self_0).clone())
-        }
-    }
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
@@ -172,7 +174,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
@@ -182,7 +184,7 @@ impl Clean<Lifetime> for ast::Lifetime {
 }
 
 // maybe use a Generic enum and use ~[Generic]?
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Generics {
     lifetimes: ~[Lifetime],
     type_params: ~[TyParam]
@@ -206,104 +208,61 @@ impl Clean<Generics> for ast::Generics {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Method {
-    name: ~str,
-    attrs: ~[Attribute],
     generics: Generics,
     self_: SelfTy,
     purity: ast::purity,
     decl: FnDecl,
-    where: ~str,
     id: ast::NodeId,
     vis: Visibility,
 }
 
-impl ::std::clone::Clone for Method {
-     pub fn clone(&self) -> Method {
-         match *self {
-             Method{name: ref __self_0_0,
-                    attrs: ref __self_0_1,
-                    generics: ref __self_0_2,
-                    self_: ref __self_0_3,
-                    purity: ref __self_0_4,
-                    decl: ref __self_0_5,
-                    where: ref __self_0_6,
-                    id: ref __self_0_7,
-                    vis: ref __self_0_8} =>
-             Method{name: __self_0_0.clone(),
-                    attrs: __self_0_1.clone(),
-                    generics: __self_0_2.clone(),
-                    self_: (*__self_0_3).clone(),
-                    purity: __self_0_4.clone(),
-                    decl: __self_0_5.clone(),
-                    where: __self_0_6.clone(),
-                    id: __self_0_7.clone(),
-                    vis: __self_0_8.clone(),}
-         }
-     }
- }
-
-impl Clean<Method> for ast::method {
-    pub fn clean(&self) -> Method {
-        Method {
-            name: self.ident.clean(),
+impl Clean<Item<Method>> for ast::method {
+    pub fn clean(&self) -> Item<Method> {
+        Item {
+            name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
-            generics: self.generics.clean(),
-            self_: self.explicit_self.clean(),
-            purity: self.purity.clone(),
-            decl: self.decl.clean(),
             where: self.span.clean(),
-            id: self.self_id.clone(),
-            vis: self.vis,
+            inner: Method {
+                generics: self.generics.clean(),
+                self_: self.explicit_self.clean(),
+                purity: self.purity.clone(),
+                decl: self.decl.clean(),
+                id: self.self_id.clone(),
+                vis: self.vis,
+            }
         }
     }
 }
 
-#[cfg(ignore)]
-impl Clean<Method> for @ast::method {
-    pub fn clean(&self) -> Method {
-        Method {
-            name: self.ident.clean(),
-            attrs: self.attrs.clean(),
-            generics: self.generics.clean(),
-            self_: self.explicit_self.clean(),
-            purity: self.purity.clone(),
-            decl: self.decl.clean(),
-            where: self.span.clean(),
-            id: self.self_id.clone(),
-            vis: self.vis,
-        }
-    }
-}
-
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TyMethod {
-    name: ~str,
-    attrs: ~[Attribute],
     purity: ast::purity,
     decl: FnDecl,
     generics: Generics,
     id: ast::NodeId,
     self_: SelfTy,
-    where: ~str
 }
 
-impl Clean<TyMethod> for ast::TypeMethod {
-    pub fn clean(&self) -> TyMethod {
-        TyMethod {
-            name: self.ident.clean(),
+impl Clean<Item<TyMethod>> for ast::TypeMethod {
+    pub fn clean(&self) -> Item<TyMethod> {
+        Item {
+            name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
-            purity: self.purity.clone(),
-            decl: self.decl.clean(),
-            self_: self.explicit_self.clean(),
-            generics: self.generics.clean(),
-            id: self.id,
-            where: self.span.clean()
+            where: self.span.clean(),
+            inner: TyMethod {
+                purity: self.purity.clone(),
+                decl: self.decl.clean(),
+                self_: self.explicit_self.clean(),
+                generics: self.generics.clean(),
+                id: self.id,
+            }
         }
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum SelfTy {
     SelfStatic,
     SelfValue,
@@ -312,9 +271,9 @@ pub enum SelfTy {
     SelfOwned,
 }
 
-impl Clean<SelfTy> for ast::explicit_self_ {
+impl Clean<SelfTy> for ast::explicit_self {
     pub fn clean(&self) -> SelfTy {
-        match *self {
+        match self.node {
             ast::sty_static => SelfStatic,
             ast::sty_value => SelfValue,
             ast::sty_uniq => SelfOwned,
@@ -324,32 +283,32 @@ impl Clean<SelfTy> for ast::explicit_self_ {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Function {
     decl: FnDecl,
-    name: ~str,
     visibility: Visibility,
-    where: ~str,
     generics: Generics,
     //body: Block,
     id: ast::NodeId,
-    attrs: ~[Attribute]
 }
 
-impl Clean<Function> for doctree::Function {
-    pub fn clean(&self) -> Function {
-        Function {
-            decl: self.decl.clean(),
-            name: self.name.clean(),
-            id: self.id,
-            attrs: collapse_docs(self.attrs.clean()),
+impl Clean<Item<Function>> for doctree::Function {
+    pub fn clean(&self) -> Item<Function> {
+        Item {
+            name: Some(self.name.clean()),
+            attrs: self.attrs.clean(),
             where: self.where.clean(),
-            visibility: self.visibility,
-            generics: self.generics.clean(),
+            inner: Function {
+                id: self.id,
+                decl: self.decl.clean(),
+                visibility: self.visibility,
+                generics: self.generics.clean(),
+            }
         }
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct ClosureDecl {
     sigil: ast::Sigil,
     region: Option<Lifetime>,
@@ -377,28 +336,12 @@ impl Clean<ClosureDecl> for ast::TyClosure {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct FnDecl {
     inputs: ~[Argument],
     output: Type,
     cf: RetStyle,
     attrs: ~[Attribute]
-}
-
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for FnDecl {
-    pub fn clone(&self) -> FnDecl {
-        match *self {
-            FnDecl{inputs: ref __self_0_0,
-            output: ref __self_0_1,
-            cf: ref __self_0_2,
-            attrs: ref __self_0_3} => FnDecl{
-                inputs: __self_0_0.clone(),
-                output: __self_0_1.clone(),
-                cf: (*__self_0_2).clone(),
-                attrs: __self_0_3.clone(),
-            }
-        }
-    }
 }
 
 impl Clean<FnDecl> for ast::fn_decl {
@@ -412,7 +355,7 @@ impl Clean<FnDecl> for ast::fn_decl {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Argument {
     ty: Type,
     name: ~str,
@@ -429,7 +372,7 @@ impl Clean<Argument> for ast::arg {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum RetStyle {
     NoReturn,
     Return
@@ -444,34 +387,33 @@ impl Clean<RetStyle> for ast::ret_style {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Trait {
-    name: ~str,
     methods: ~[TraitMethod],
     generics: Generics,
-    where: ~str,
-    attrs: ~[Attribute],
     parents: ~[TraitRef],
     id: ast::NodeId,
 }
 
-impl Clean<Trait> for doctree::Trait {
-    pub fn clean(&self) -> Trait {
-        Trait {
-            name: self.name.clean(),
-            methods: self.methods.clean(),
-            generics: self.generics.clean(),
-            parents: self.parents.clean(),
-            where: self.where.clean(),
+impl Clean<Item<Trait>> for doctree::Trait {
+    pub fn clean(&self) -> Item<Trait> {
+        Item {
+            name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            id: self.id
+            where: self.where.clean(),
+            inner: Trait {
+                methods: self.methods.clean(),
+                generics: self.generics.clean(),
+                parents: self.parents.clean(),
+                id: self.id
+            }
         }
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TraitRef {
-    path: ~str,
+    path: Path,
     id: ast::NodeId,
 }
 
@@ -484,9 +426,10 @@ impl Clean<TraitRef> for ast::trait_ref {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum TraitMethod {
-    Required(TyMethod),
-    Provided(Method),
+    Required(Item<TyMethod>),
+    Provided(Item<Method>),
 }
 
 impl TraitMethod {
@@ -503,15 +446,6 @@ impl TraitMethod {
         }
     }
 }
-#[doc = "Automatically derived."]
-impl ::std::clone::Clone for TraitMethod {
-    pub fn clone(&self) -> TraitMethod {
-        match *self {
-            Required(ref __self_0) => Required((*__self_0).clone()),
-            Provided(ref __self_0) => Provided(__self_0.clone())
-        }
-    }
-}
 
 impl Clean<TraitMethod> for ast::trait_method {
     pub fn clean(&self) -> TraitMethod {
@@ -525,7 +459,7 @@ impl Clean<TraitMethod> for ast::trait_method {
 /// A representation of a Type suitable for hyperlinking purposes. Ideally one can get the original
 /// type out of the AST/ty::ctxt given one of these, if more information is needed. Most importantly
 /// it does not preserve mutability or boxes.
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
@@ -583,46 +517,52 @@ impl Clean<Type> for ast::Ty {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct StructField {
-    name: ~str,
     type_: Type,
-    attrs: ~[Attribute],
     visibility: Option<Visibility>,
 }
 
-impl Clean<StructField> for doctree::StructField {
-    pub fn clean(&self) -> StructField {
-        StructField {
-            name: if self.name.is_some() { self.name.unwrap().clean() } else { ~"" },
-            type_: self.type_.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            visibility: self.visibility
+impl Clean<Item<StructField>> for ast::struct_field {
+    pub fn clean(&self) -> Item<StructField> {
+        let (name, vis) = match self.node.kind {
+            ast::named_field(id, vis) => (Some(id), Some(vis)),
+            _ => (None, None)
+        };
+        Item {
+            name: name.clean(),
+            attrs: self.node.attrs.clean(),
+            where: self.span.clean(),
+            inner: StructField {
+                type_: self.node.ty.clean(),
+                visibility: vis,
+            }
         }
     }
 }
 
 pub type Visibility = ast::visibility;
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Struct {
-    name: ~str,
-    where: ~str,
     node: ast::NodeId,
     struct_type: doctree::StructType,
-    attrs: ~[Attribute],
     generics: Generics,
-    fields: ~[StructField],
+    fields: ~[Item<StructField>],
 }
 
-impl Clean<Struct> for doctree::Struct {
-    pub fn clean(&self) -> Struct {
-        Struct {
-            name: self.name.clean(),
-            node: self.id,
-            struct_type: self.struct_type,
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            generics: self.generics.clean(),
-            fields: self.fields.iter().transform(|x| x.clean()).collect(),
+impl Clean<Item<Struct>> for doctree::Struct {
+    pub fn clean(&self) -> Item<Struct> {
+        Item {
+            name: Some(self.name.clean()),
+            attrs: self.attrs.clean(),
             where: self.where.clean(),
+            inner: Struct {
+                node: self.id,
+                struct_type: self.struct_type,
+                generics: self.generics.clean(),
+                fields: self.fields.clean(),
+            }
         }
     }
 }
@@ -630,61 +570,64 @@ impl Clean<Struct> for doctree::Struct {
 /// This is a more limited form of the standard Struct, different in that it
 /// it lacks the things most items have (name, id, parameterization). Found
 /// only as a variant in an enum.
+#[deriving(Clone, Encodable, Decodable)]
 pub struct VariantStruct {
     struct_type: doctree::StructType,
-    fields: ~[StructField],
+    fields: ~[Item<StructField>],
 }
 
 impl Clean<VariantStruct> for syntax::ast::struct_def {
     pub fn clean(&self) -> VariantStruct {
         VariantStruct {
             struct_type: doctree::struct_type_from_def(self),
-            fields: self.fields.iter().transform(
-                                       |x| doctree::StructField::new(&x.node).clean()).collect()
+            fields: self.fields.clean(),
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Enum {
-    variants: ~[Variant],
+    variants: ~[Item<Variant>],
     generics: Generics,
-    attrs: ~[Attribute],
-    name: ~str,
     node: ast::NodeId,
-    where: ~str,
 }
 
-impl Clean<Enum> for doctree::Enum {
-    pub fn clean(&self) -> Enum {
-        Enum {
-            variants: self.variants.iter().transform(|x| x.clean()).collect(),
-            generics: self.generics.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            name: self.name.clean(),
+impl Clean<Item<Enum>> for doctree::Enum {
+    pub fn clean(&self) -> Item<Enum> {
+        Item {
+            name: Some(self.name.clean()),
+            attrs: self.attrs.clean(),
             where: self.where.clean(),
-            node: self.id
+            inner: Enum {
+                variants: self.variants.iter().transform(|x| x.clean()).collect(),
+                generics: self.generics.clean(),
+                node: self.id,
+            }
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Variant {
-    name: ~str,
-    attrs: ~[Attribute],
     kind: VariantKind,
     visibility: Visibility,
 }
 
-impl Clean<Variant> for doctree::Variant {
-    pub fn clean(&self) -> Variant {
-        Variant {
-            name: self.name.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            kind: self.kind.clean(),
-            visibility: self.visibility
+impl Clean<Item<Variant>> for doctree::Variant {
+    pub fn clean(&self) -> Item<Variant> {
+        Item {
+            name: Some(self.name.clean()),
+            attrs: self.attrs.clean(),
+            where: self.where.clean(),
+            inner: Variant {
+                kind: self.kind.clean(),
+                visibility: self.visibility
+            }
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum VariantKind {
     CLikeVariant,
     TupleVariant(~[Type]),
@@ -713,22 +656,37 @@ impl Clean<~str> for syntax::codemap::span {
     }
 }
 
-impl Clean<~str> for ast::Path {
-    pub fn clean(&self) -> ~str {
-        use syntax::parse::token::interner_get;
+#[deriving(Clone, Encodable, Decodable)]
+pub struct Path {
+    name: ~str,
+    lifetime: Option<Lifetime>,
+    typarams: ~[Type]
+}
 
-        let mut s = ~"";
-        let mut first = true;
-        for i in self.idents.iter().transform(|x| interner_get(x.name)) {
-            if !first {
-                s.push_str("::");
-            } else {
-                first = false;
-            }
-            s.push_str(i);
+impl Clean<Path> for ast::Path {
+    pub fn clean(&self) -> Path {
+        Path {
+            name: path_to_str(self),
+            lifetime: self.rp.clean(),
+            typarams: self.types.clean(),
         }
-        s
     }
+}
+
+pub fn path_to_str(p: &ast::Path) -> ~str {
+    use syntax::parse::token::interner_get;
+
+    let mut s = ~"";
+    let mut first = true;
+    for i in p.idents.iter().transform(|x| interner_get(x.name)) {
+        if !first || p.global {
+            s.push_str("::");
+        } else {
+            first = false;
+        }
+        s.push_str(i);
+    }
+    s
 }
 
 impl Clean<~str> for ast::ident {
@@ -737,29 +695,29 @@ impl Clean<~str> for ast::ident {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Typedef {
-    name: ~str,
     type_: Type,
     generics: Generics,
-    where: ~str,
     id: ast::NodeId,
-    attrs: ~[Attribute],
 }
 
-impl Clean<Typedef> for doctree::Typedef {
-    pub fn clean(&self) -> Typedef {
-        Typedef {
-            type_: self.ty.clean(),
-            generics: self.gen.clean(),
-            name: self.name.clean(),
-            id: self.id.clone(),
+impl Clean<Item<Typedef>> for doctree::Typedef {
+    pub fn clean(&self) -> Item<Typedef> {
+        Item {
+            name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             where: self.where.clean(),
+            inner: Typedef {
+                type_: self.ty.clean(),
+                generics: self.gen.clean(),
+                id: self.id.clone(),
+            }
         }
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct BareFunctionDecl {
     purity: ast::purity,
     generics: Generics,
@@ -781,33 +739,33 @@ impl Clean<BareFunctionDecl> for ast::TyBareFn {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Static {
-    name: ~str,
     type_: Type,
     mutability: Mutability,
-    where: ~str,
     /// It's useful to have the value of a static documented, but I have no
     /// desire to represent expressions (that'd basically be all of the AST,
     /// which is huge!). So, have a string.
     expr: ~str,
-    attrs: ~[Attribute],
 }
 
-impl Clean<Static> for doctree::Static {
-    pub fn clean(&self) -> Static {
+impl Clean<Item<Static>> for doctree::Static {
+    pub fn clean(&self) -> Item<Static> {
         debug!("claning static %s: %?", self.name.clean(), self);
-        Static {
-            type_: self.type_.clean(),
-            mutability: self.mutability.clean(),
-            expr: self.expr.span.to_src(),
-            name: self.name.clean(),
+        Item {
+            name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             where: self.where.clean(),
+            inner: Static {
+                type_: self.type_.clean(),
+                mutability: self.mutability.clean(),
+                expr: self.expr.span.to_src(),
+            }
         }
     }
 }
 
-#[deriving(ToStr, Clone)]
+#[deriving(ToStr, Clone, Encodable, Decodable)]
 pub enum Mutability {
     Mutable,
     Immutable,
@@ -824,47 +782,51 @@ impl Clean<Mutability> for ast::mutability {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Impl {
     generics: Generics,
     trait_: Option<TraitRef>,
     for_: Type,
-    methods: ~[Method],
-    attrs: ~[Attribute],
-    where: ~str,
+    methods: ~[Item<Method>],
 }
 
-impl Clean<Impl> for doctree::Impl {
-    pub fn clean(&self) -> Impl {
-        Impl {
-            generics: self.generics.clean(),
-            trait_: self.trait_.clean(),
-            for_: self.for_.clean(),
-            methods: self.methods.clean(),
+impl Clean<Item<Impl>> for doctree::Impl {
+    pub fn clean(&self) -> Item<Impl> {
+        Item {
+            name: None,
             attrs: self.attrs.clean(),
             where: self.where.clean(),
+            inner: Impl {
+                generics: self.generics.clean(),
+                trait_: self.trait_.clean(),
+                for_: self.for_.clean(),
+                methods: self.methods.clean(),
+            }
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct ViewItem {
-    attrs: ~[Attribute],
-    where: ~str,
     vis: Visibility,
     inner: ViewItemInner
 }
 
-impl Clean<ViewItem> for ast::view_item {
-    pub fn clean(&self) -> ViewItem {
-        ViewItem {
+impl Clean<Item<ViewItem>> for ast::view_item {
+    pub fn clean(&self) -> Item<ViewItem> {
+        Item {
+            name: None,
             attrs: self.attrs.clean(),
             where: self.span.clean(),
-            vis: self.vis,
-            inner: self.node.clean()
+            inner: ViewItem {
+                vis: self.vis,
+                inner: self.node.clean()
+            }
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum ViewItemInner {
     ExternMod(~str, ~[Attribute], ast::NodeId),
     Import(~[ViewPath])
@@ -880,27 +842,28 @@ impl Clean<ViewItemInner> for ast::view_item_ {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum ViewPath {
-    SimpleImport(~str, ~str, ast::NodeId),
-    GlobImport(~str, ast::NodeId),
-    ImportList(~str, ~[ViewListIdent], ast::NodeId)
+    SimpleImport(~str, Path, ast::NodeId),
+    GlobImport(Path, ast::NodeId),
+    ImportList(Path, ~[ViewListIdent], ast::NodeId)
 }
 
-impl Clean<ViewPath> for ast::view_path_ {
+impl Clean<ViewPath> for ast::view_path {
     pub fn clean(&self) -> ViewPath {
-        match self {
-            &ast::view_path_simple(ref i, ref p, ref id) => SimpleImport(i.clean(), p.clean(), *id),
-            &ast::view_path_glob(ref p, ref id) => GlobImport(p.clean(), *id),
-            &ast::view_path_list(ref p, ref pl, ref id) => ImportList(p.clean(), pl.clean(), *id),
+        match self.node {
+            ast::view_path_simple(ref i, ref p, ref id) => SimpleImport(i.clean(), p.clean(), *id),
+            ast::view_path_glob(ref p, ref id) => GlobImport(p.clean(), *id),
+            ast::view_path_list(ref p, ref pl, ref id) => ImportList(p.clean(), pl.clean(), *id),
         }
     }
 }
 
 pub type ViewListIdent = ~str;
 
-impl Clean<ViewListIdent> for ast::path_list_ident_ {
+impl Clean<ViewListIdent> for ast::path_list_ident {
     pub fn clean(&self) -> ViewListIdent {
-        self.name.clean()
+        self.node.name.clean()
     }
 }
 
@@ -938,8 +901,8 @@ fn name_from_pat(p: &ast::pat) -> ~str {
     use syntax::ast::*;
     match p.node {
         pat_wild => ~"_",
-        pat_ident(_, ref p, _) => p.clean(),
-        pat_enum(ref p, _) => p.clean(),
+        pat_ident(_, ref p, _) => path_to_str(p),
+        pat_enum(ref p, _) => path_to_str(p),
         pat_struct(*) => fail!("tried to get argument name from pat_struct, \
                                  which is not allowed in function arguments"),
         pat_tup(*) => ~"(tuple arg NYI)",
@@ -1071,13 +1034,18 @@ fn resolve_type(t: &Type) -> Type {
                             debug!("found external def: %?", di);
                             path = pathstr.to_owned();
                             ty = match di {
-                                def_fn(*) => ~"fn", 
+                                def_fn(*) => ~"fn",
                                 def_ty(*) => ~"enum",
                                 def_trait(*) => ~"trait",
                                 def_prim_ty(p) => match p {
                                     ty_str => ~"str",
                                     ty_bool => ~"bool",
-                                    _ => Primitive(p).to_json().to_str(),
+                                    ty_int(t) => match t.to_str() {
+                                        ~"" => ~"i",
+                                        s => s
+                                    },
+                                    ty_uint(t) => t.to_str(),
+                                    ty_float(t) => t.to_str()
                                 },
                                 def_ty_param(*) => ~"generic",
                                 def_struct(*) => ~"struct",

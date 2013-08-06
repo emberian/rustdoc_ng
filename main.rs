@@ -13,15 +13,16 @@ extern mod rustc;
 extern mod extra;
 
 use std::cell::Cell;
-use extra::json::ToJson;
+use extra::serialize::Encodable;
 
 pub mod core;
 pub mod doctree;
 pub mod clean;
-pub mod jsonify;
-pub mod visit;
+pub mod visit_ast;
 pub mod plugins;
 mod passes;
+
+pub static SCHEMA_VERSION: &'static str = "0.6.0";
 
 pub static ctxtkey: std::local_data::Key<@core::DocContext> = &std::local_data::Key;
 
@@ -41,7 +42,7 @@ fn main() {
         optflag("h", "help", "show this help message"),
     ];
 
-    let matches = getopts(args.tail(), opts).get();
+    let matches = getopts(args.tail(), opts).unwrap();
 
     if opt_present(&matches, "h") || opt_present(&matches, "help") {
         println(usage(args[0], opts));
@@ -66,14 +67,26 @@ fn main() {
     let cr = Cell::new(Path(matches.free[0]));
 
     let mut crate = std::task::try(|| {let cr = cr.take(); core::run_core(libs.take(), &cr)}).unwrap();
-    let mut json = match crate.to_json() {
-        extra::json::Object(o) => o,
-        _ => fail!("JSON returned was not an object")
+
+    // { "schema": version, "crate": { parsed crate ... }, "plugins": { output of plugins ... }}
+    let mut json = ~extra::treemap::TreeMap::new();
+    json.insert(~"schema", extra::json::String(SCHEMA_VERSION.to_owned()));
+
+    // FIXME: yuck, Rust -> str -> JSON round trip! No way to .encode
+    // straight to the Rust JSON representation.
+    let crate_json_str = do std::io::with_str_writer |w| {
+        crate.encode(&mut extra::json::Encoder(w));
     };
+    let crate_json = match extra::json::from_str(crate_json_str) {
+        Ok(j) => j,
+        Err(_) => fail!("Rust generated JSON is invalid??")
+    };
+
+    json.insert(~"crate", crate_json);
 
     let mut pm = plugins::PluginManager::new(Path("/tmp/rustdoc_ng/plugins"));
 
-    foreach pass in passes.iter() {
+    for pass in passes.iter() {
         pm.add_plugin(match pass.as_slice() {
             "strip-hidden" => passes::strip_hidden,
             "clean-comments" => passes::clean_comments,
@@ -86,12 +99,9 @@ fn main() {
     }
 
     let res = pm.run_plugins(&mut crate);
-    foreach result in res.iter() {
-        match result {
-            &Some((ref s, ref toj)) => { json.insert(s.clone(), toj.to_json()); },
-            &None => (),
-        }
-    }
+    let plugins_json = ~res.consume_iter().filter_map(|opt| opt).collect();
+
+    json.insert(~"plugins", extra::json::Object(plugins_json));
 
     println(extra::json::Object(json).to_str());
 }

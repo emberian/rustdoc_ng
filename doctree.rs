@@ -1,5 +1,7 @@
-//! The simplified AST used by rustdoc
+//! This module is used to store stuff from Rust's AST in a more convenient
+//! manner (and with prettier names) before cleaning.
 
+use syntax;
 use syntax::codemap::span;
 use syntax::ast;
 use syntax::ast::{ident, NodeId};
@@ -7,6 +9,7 @@ use syntax::ast::{ident, NodeId};
 pub struct Module {
     name: Option<ident>,
     attrs: ~[ast::Attribute],
+    where: span,
     structs: ~[Struct],
     enums: ~[Enum],
     fns: ~[Function],
@@ -22,6 +25,7 @@ impl Module {
     pub fn new(name: Option<ident>) -> Module {
         Module {
             name       : name,
+            where: syntax::codemap::dummy_sp(),
             attrs      : ~[],
             structs    : ~[],
             enums      : ~[],
@@ -36,7 +40,7 @@ impl Module {
     }
 }
 
-#[deriving(ToStr)]
+#[deriving(ToStr, Clone, Encodable, Decodable)]
 pub enum StructType {
     /// A normal struct
     Plain,
@@ -53,38 +57,13 @@ pub enum TypeBound {
     TraitBound(ast::trait_ref)
 }
 
-pub struct StructField {
-    id: NodeId,
-    type_: ast::Ty,
-    /// Name is optional for tuple structs
-    name: Option<ident>,
-    attrs: ~[ast::Attribute],
-    visibility: Option<ast::visibility>
-}
-
-impl StructField {
-    pub fn new(sf: &ast::struct_field_) -> StructField {
-        let (name, vis) = match sf.kind {
-            ast::named_field(id, vis) => (Some(id), Some(vis)),
-            _ => (None, None)
-        };
-        StructField {
-            id: sf.id,
-            type_: sf.ty.clone(),
-            attrs: sf.attrs.clone(),
-            name: name,
-            visibility: vis,
-        }
-    }
-}
-
 pub struct Struct {
     id: NodeId,
     struct_type: StructType,
     name: ident,
     generics: ast::Generics,
     attrs: ~[ast::Attribute],
-    fields: ~[StructField],
+    fields: ~[@ast::struct_field],
     where: span,
 }
 
@@ -101,7 +80,8 @@ pub struct Variant {
     name: ident,
     attrs: ~[ast::Attribute],
     kind: ast::variant_kind,
-    visibility: ast::visibility
+    visibility: ast::visibility,
+    where: span,
 }
 
 pub struct Function {

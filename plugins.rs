@@ -3,7 +3,7 @@ use clean;
 use extra;
 use dl = std::unstable::dynamic_lib;
 
-pub type PluginResult = Option<(~str, @extra::json::ToJson)>;
+pub type PluginResult = Option<(~str, extra::json::Json)>;
 pub type plugin_callback = extern fn (&mut clean::Crate) -> PluginResult;
 
 /// Manages loading and running of plugins
