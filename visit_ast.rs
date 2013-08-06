@@ -11,14 +11,14 @@ use doctree::*;
 use std::local_data;
 
 pub struct RustdocVisitor {
-    mods: ~[Module],
+    module: Module,
     attrs: ~[ast::Attribute],
 }
 
 impl RustdocVisitor {
     pub fn new() -> RustdocVisitor {
         RustdocVisitor {
-            mods: ~[],
+            module: Module::new(None),
             attrs: ~[],
         }
     }
@@ -80,7 +80,7 @@ impl RustdocVisitor {
 
         // Only run on the toplevel mod(s)
         fn visit_mod(m: &ast::_mod, span: span, id: ast::NodeId, rcx: @mut RustdocVisitor) {
-            rcx.mods.push(visit_mod_contents(m, span, id));
+            rcx.module = visit_mod_contents(m, span, id);
         }
 
         fn visit_mod_contents(m: &ast::_mod, span: span, id: ast::NodeId) -> Module {

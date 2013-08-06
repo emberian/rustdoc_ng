@@ -48,7 +48,7 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    mods: ~[Item<Module>],
+    module: Item<Module>,
 }
 
 impl Clean<Crate> for visit_ast::RustdocVisitor {
@@ -61,7 +61,7 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
                 Some(x) => x.to_owned(),
                 None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
             },
-            mods: self.mods.clean(),
+            module: self.module.clean(),
             attrs: self.attrs.clean(),
         }
     }
@@ -73,7 +73,7 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Item<T> {
     /// Stringified span
-    where: ~str,
+    source: ~str,
     /// Not everything has a name. E.g., impls
     name: Option<~str>,
     attrs: ~[Attribute],
@@ -103,7 +103,7 @@ impl Clean<Item<Module>> for doctree::Module {
         Item {
             name: Some(name),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Module {
                 structs    : self.structs.clean(),
                 enums      : self.enums.clean(),
@@ -145,7 +145,7 @@ impl Clean<Attribute> for ast::Attribute {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct TyParam {
     name: ~str,
-    node: ast::NodeId,
+    id: ast::NodeId,
     bounds: ~[TyParamBound]
 }
 
@@ -153,7 +153,7 @@ impl Clean<TyParam> for ast::TyParam {
     pub fn clean(&self) -> TyParam {
         TyParam {
             name: self.ident.clean(),
-            node: self.id,
+            id: self.id,
             bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
     }
@@ -223,7 +223,7 @@ impl Clean<Item<Method>> for ast::method {
         Item {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
-            where: self.span.clean(),
+            source: self.span.clean(),
             inner: Method {
                 generics: self.generics.clean(),
                 self_: self.explicit_self.clean(),
@@ -250,7 +250,7 @@ impl Clean<Item<TyMethod>> for ast::TypeMethod {
         Item {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
-            where: self.span.clean(),
+            source: self.span.clean(),
             inner: TyMethod {
                 purity: self.purity.clone(),
                 decl: self.decl.clean(),
@@ -297,7 +297,7 @@ impl Clean<Item<Function>> for doctree::Function {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Function {
                 id: self.id,
                 decl: self.decl.clean(),
@@ -400,7 +400,7 @@ impl Clean<Item<Trait>> for doctree::Trait {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Trait {
                 methods: self.methods.clean(),
                 generics: self.generics.clean(),
@@ -532,7 +532,7 @@ impl Clean<Item<StructField>> for ast::struct_field {
         Item {
             name: name.clean(),
             attrs: self.node.attrs.clean(),
-            where: self.span.clean(),
+            source: self.span.clean(),
             inner: StructField {
                 type_: self.node.ty.clean(),
                 visibility: vis,
@@ -545,7 +545,7 @@ pub type Visibility = ast::visibility;
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Struct {
-    node: ast::NodeId,
+    id: ast::NodeId,
     struct_type: doctree::StructType,
     generics: Generics,
     fields: ~[Item<StructField>],
@@ -556,9 +556,9 @@ impl Clean<Item<Struct>> for doctree::Struct {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Struct {
-                node: self.id,
+                id: self.id,
                 struct_type: self.struct_type,
                 generics: self.generics.clean(),
                 fields: self.fields.clean(),
@@ -589,7 +589,7 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
 pub struct Enum {
     variants: ~[Item<Variant>],
     generics: Generics,
-    node: ast::NodeId,
+    id: ast::NodeId,
 }
 
 impl Clean<Item<Enum>> for doctree::Enum {
@@ -597,11 +597,11 @@ impl Clean<Item<Enum>> for doctree::Enum {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Enum {
                 variants: self.variants.iter().transform(|x| x.clean()).collect(),
                 generics: self.generics.clean(),
-                node: self.id,
+                id: self.id,
             }
         }
     }
@@ -618,7 +618,7 @@ impl Clean<Item<Variant>> for doctree::Variant {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Variant {
                 kind: self.kind.clean(),
                 visibility: self.visibility
@@ -707,7 +707,7 @@ impl Clean<Item<Typedef>> for doctree::Typedef {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Typedef {
                 type_: self.ty.clean(),
                 generics: self.gen.clean(),
@@ -755,7 +755,7 @@ impl Clean<Item<Static>> for doctree::Static {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Static {
                 type_: self.type_.clean(),
                 mutability: self.mutability.clean(),
@@ -795,7 +795,7 @@ impl Clean<Item<Impl>> for doctree::Impl {
         Item {
             name: None,
             attrs: self.attrs.clean(),
-            where: self.where.clean(),
+            source: self.where.clean(),
             inner: Impl {
                 generics: self.generics.clean(),
                 trait_: self.trait_.clean(),
@@ -817,7 +817,7 @@ impl Clean<Item<ViewItem>> for ast::view_item {
         Item {
             name: None,
             attrs: self.attrs.clean(),
-            where: self.span.clean(),
+            source: self.span.clean(),
             inner: ViewItem {
                 vis: self.vis,
                 inner: self.node.clean()
