@@ -19,6 +19,7 @@ pub mod core;
 pub mod doctree;
 pub mod clean;
 pub mod visit_ast;
+pub mod visit;
 pub mod plugins;
 mod passes;
 
