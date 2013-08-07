@@ -1,13 +1,9 @@
 use clean;
 use clean::Item;
-
-enum Action {
-    Keep,
-    Remove,
-}
+use std::iterator::Extendable;
 
 trait DocVisitor {
-    /// Visit an item, potentially mutating it. The return value is true if
+    /// Visit an item, potentially mutating it. The return value is true
     /// you want the item to be removed from the AST, false otherwise.
     pub fn visit_item(&mut self, i: &mut Item) -> bool {
         self.visit_item_contents(i)
@@ -21,21 +17,37 @@ trait DocVisitor {
     /// the item and drops it if visit_item returns false, and then calls
     /// visit_mod on it (thus achieving recursion).
     pub fn visit_mod(&mut self, m: &mut clean::Module) {
-        m.structs    = m.structs.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.enums      = m.enums.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.fns        = m.fns.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.typedefs   = m.typedefs.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.statics    = m.statics.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.traits     = m.traits.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.impls      = m.impls.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        m.view_items = m.view_items.mut_iter().filter(|x| self.visit_item(*x)).transform(|x| x.clone()).to_owned_vec();
-        for x in m.mods.mut_iter().filter(|x| self.visit_item(*x)) {
-            let m_ = match x.inner {
+        use std::util::swap;
+
+        let mut foo = ~[]; swap(&mut m.structs, &mut foo);
+        m.structs.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.enums, &mut foo);
+        m.enums.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.fns, &mut foo);
+        m.fns.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.mods, &mut foo);
+        m.mods.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.typedefs, &mut foo);
+        m.typedefs.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.statics, &mut foo);
+        m.statics.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.traits, &mut foo);
+        m.traits.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.impls, &mut foo);
+        m.impls.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        let mut foo = ~[]; swap(&mut m.view_items, &mut foo);
+        m.view_items.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+
+        let mut foo = ~[]; swap(&mut m.mods, &mut foo);
+        m.mods.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)).transform(|x| {
+            {let m_ = match x.inner {
                 clean::ModuleItem(ref mut m) => m,
                 _ => fail!("non-module in ModuleItem")
             };
             self.visit_mod(m_);
-        }
+            }
+            x
+            }));
     }
     pub fn visit_crate(&mut self, &mut clean::Crate);
 }
