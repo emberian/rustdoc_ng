@@ -25,24 +25,13 @@ trait DocVisitor {
     pub fn visit_mod(&mut self, m: &mut clean::Module) {
         use std::util::swap;
 
-        let mut foo = ~[]; swap(&mut m.structs, &mut foo);
-        m.structs.extend(&mut foo.consume_iter().filter_map(|mut x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.enums, &mut foo);
-        m.enums.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.fns, &mut foo);
-        m.fns.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.typedefs, &mut foo);
-        m.typedefs.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.statics, &mut foo);
-        m.statics.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.traits, &mut foo);
-        m.traits.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.impls, &mut foo);
-        m.impls.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
-        let mut foo = ~[]; swap(&mut m.view_items, &mut foo);
-        m.view_items.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
+        let fields = ~[&mut m.structs, &mut m.enums, &mut m.fns, &mut m.typedefs,
+                       &mut m.statics, &mut m.traits, &mut m.impls, &mut m.view_items];
+
+        for field in fields.consume_iter() { 
+            let mut foo = ~[]; swap(field, &mut foo);
+            field.extend(&mut foo.consume_iter().filter_map(|mut x| self.visit_item(x)));
+        }
 
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
         m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)).transform(|x| {
