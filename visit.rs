@@ -3,15 +3,21 @@ use clean::Item;
 use std::iterator::Extendable;
 
 trait DocVisitor {
-    /// Visit an item, potentially mutating it. The return value is true
-    /// you want the item to be removed from the AST, false otherwise.
-    pub fn visit_item(&mut self, i: &mut Item) -> bool {
-        self.visit_item_contents(i)
+    /// Visit an item, returning Some(item) to replace the item in the AST,
+    /// and None to remove it. Note that just returning the Item you're given
+    /// is equivalent to not changing it.
+    pub fn visit_item(&mut self, mut i: Item) -> Option<Item> {
+        let r = self.visit_item_contents(&mut i);
+        if r {
+            Some(i)
+        } else {
+            None
+        }
     }
     /// Visit an item's contents. This is the default "user-overridable"
-    /// method. The return value is the same as visit_item, and visit_item (by
-    /// default) indeed calls visit_item_contents before doing its thing for
-    /// any potential child items.
+    /// method. Return true to keep the item in the AST, and false to remove
+    /// it, much like visit_item, but with a mutable reference and not a
+    /// value.
     pub fn visit_item_contents(&mut self, &mut Item) -> bool;
     /// Visit every item in a module. For visiting submodules, it first visits
     /// the item and drops it if visit_item returns false, and then calls
@@ -20,26 +26,26 @@ trait DocVisitor {
         use std::util::swap;
 
         let mut foo = ~[]; swap(&mut m.structs, &mut foo);
-        m.structs.extend(&mut foo.mut_iter().filter(|mut x| self.visit_item(x)));
+        m.structs.extend(&mut foo.consume_iter().filter_map(|mut x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.enums, &mut foo);
-        m.enums.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.enums.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.fns, &mut foo);
-        m.fns.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.fns.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.typedefs, &mut foo);
-        m.typedefs.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.typedefs.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.statics, &mut foo);
-        m.statics.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.statics.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.traits, &mut foo);
-        m.traits.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.traits.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.impls, &mut foo);
-        m.impls.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.impls.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.view_items, &mut foo);
-        m.view_items.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
+        m.view_items.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
 
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)).transform(|x| {
+        m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)).transform(|x| {
             {let m_ = match x.inner {
                 clean::ModuleItem(ref mut m) => m,
                 _ => fail!("non-module in ModuleItem")
