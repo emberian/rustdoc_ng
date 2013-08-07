@@ -20,26 +20,26 @@ trait DocVisitor {
         use std::util::swap;
 
         let mut foo = ~[]; swap(&mut m.structs, &mut foo);
-        m.structs.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.structs.extend(&mut foo.mut_iter().filter(|mut x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.enums, &mut foo);
-        m.enums.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.enums.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.fns, &mut foo);
-        m.fns.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.fns.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.mods.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.typedefs, &mut foo);
-        m.typedefs.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.typedefs.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.statics, &mut foo);
-        m.statics.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.statics.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.traits, &mut foo);
-        m.traits.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.traits.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.impls, &mut foo);
-        m.impls.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.impls.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
         let mut foo = ~[]; swap(&mut m.view_items, &mut foo);
-        m.view_items.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)));
+        m.view_items.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)));
 
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.consume_iter().filter(|x| self.visit_item(x)).transform(|x| {
+        m.mods.extend(&mut foo.mut_iter().filter(|x| self.visit_item(x)).transform(|x| {
             {let m_ = match x.inner {
                 clean::ModuleItem(ref mut m) => m,
                 _ => fail!("non-module in ModuleItem")
