@@ -30,11 +30,11 @@ trait DocVisitor {
 
         for field in fields.consume_iter() { 
             let mut foo = ~[]; swap(field, &mut foo);
-            field.extend(&mut foo.consume_iter().filter_map(|mut x| self.visit_item(x)));
+            field.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)));
         }
 
         let mut foo = ~[]; swap(&mut m.mods, &mut foo);
-        m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)).transform(|x| {
+        m.mods.extend(&mut foo.consume_iter().filter_map(|x| self.visit_item(x)).transform(|mut x| {
             {let m_ = match x.inner {
                 clean::ModuleItem(ref mut m) => m,
                 _ => fail!("non-module in ModuleItem")
