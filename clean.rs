@@ -7,6 +7,7 @@ use rustc::metadata::{csearch,decoder,cstore};
 use syntax;
 use syntax::ast;
 
+use std;
 use doctree;
 use visit_ast;
 use std::local_data;
@@ -48,7 +49,7 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    module: Item<Module>,
+    module: Option<Item>,
 }
 
 impl Clean<Crate> for visit_ast::RustdocVisitor {
@@ -61,8 +62,8 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
                 Some(x) => x.to_owned(),
                 None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
             },
-            module: self.module.clean(),
-            attrs: collapse_docs(self.attrs.clean()),
+            module: Some(self.module.clean()),
+            attrs: self.attrs.clean(),
         }
     }
 }
@@ -71,30 +72,39 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
 /// name. That is, anything that can be documented. This doesn't correspond
 /// directly to the AST's concept of an item; it's a strict superset.
 #[deriving(Clone, Encodable, Decodable)]
-pub struct Item<T> {
+pub struct Item {
     /// Stringified span
     source: ~str,
     /// Not everything has a name. E.g., impls
     name: Option<~str>,
     attrs: ~[Attribute],
-    inner: T,
+    inner: ItemEnum,
+}
+
+#[deriving(Clone, Encodable, Decodable)]
+pub enum ItemEnum {
+    StructItem(Struct),
+    EnumItem(Enum),
+    FunctionItem(Function),
+    ModuleItem(Module),
+    TypedefItem(Typedef),
+    StaticItem(Static),
+    TraitItem(Trait),
+    ImplItem(Impl),
+    ViewItemItem(ViewItem),
+    TyMethodItem(TyMethod),
+    MethodItem(Method),
+    StructFieldItem(StructField),
+    VariantItem(Variant),
 }
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Module {
-    structs: ~[Item<Struct>],
-    enums: ~[Item<Enum>],
-    fns: ~[Item<Function>],
-    mods: ~[Item<Module>],
-    typedefs: ~[Item<Typedef>],
-    statics: ~[Item<Static>],
-    traits: ~[Item<Trait>],
-    impls: ~[Item<Impl>],
-    view_items: ~[Item<ViewItem>],
+    items: ~[Item],
 }
 
-impl Clean<Item<Module>> for doctree::Module {
-    pub fn clean(&self) -> Item<Module> {
+impl Clean<Item> for doctree::Module {
+    pub fn clean(&self) -> Item {
         let name = if self.name.is_some() {
             self.name.unwrap().clean()
         } else {
@@ -104,17 +114,13 @@ impl Clean<Item<Module>> for doctree::Module {
             name: Some(name),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Module {
-                structs    : self.structs.clean(),
-                enums      : self.enums.clean(),
-                fns        : self.fns.clean(),
-                mods       : self.mods.clean(),
-                typedefs   : self.typedefs.clean(),
-                statics    : self.statics.clean(),
-                traits     : self.traits.clean(),
-                impls      : self.impls.clean(),
-                view_items : self.view_items.clean(),
-            }
+            inner: ModuleItem(Module {
+                items: std::vec::concat(&[self.structs.clean(),
+                              self.enums.clean(), self.fns.clean(),
+                              self.mods.clean(), self.typedefs.clean(),
+                              self.statics.clean(), self.traits.clean(),
+                              self.impls.clean(), self.view_items.clean()])
+            })
         }
     }
 }
@@ -218,20 +224,20 @@ pub struct Method {
     vis: Visibility,
 }
 
-impl Clean<Item<Method>> for ast::method {
-    pub fn clean(&self) -> Item<Method> {
+impl Clean<Item> for ast::method {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
-            inner: Method {
+            inner: MethodItem(Method {
                 generics: self.generics.clean(),
                 self_: self.explicit_self.clean(),
                 purity: self.purity.clone(),
                 decl: self.decl.clean(),
                 id: self.self_id.clone(),
                 vis: self.vis,
-            }
+            }),
         }
     }
 }
@@ -245,19 +251,19 @@ pub struct TyMethod {
     self_: SelfTy,
 }
 
-impl Clean<Item<TyMethod>> for ast::TypeMethod {
-    pub fn clean(&self) -> Item<TyMethod> {
+impl Clean<Item> for ast::TypeMethod {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
-            inner: TyMethod {
+            inner: TyMethodItem(TyMethod {
                 purity: self.purity.clone(),
                 decl: self.decl.clean(),
                 self_: self.explicit_self.clean(),
                 generics: self.generics.clean(),
                 id: self.id,
-            }
+            }),
         }
     }
 }
@@ -292,18 +298,18 @@ pub struct Function {
     id: ast::NodeId,
 }
 
-impl Clean<Item<Function>> for doctree::Function {
-    pub fn clean(&self) -> Item<Function> {
+impl Clean<Item> for doctree::Function {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Function {
+            inner: FunctionItem(Function {
                 id: self.id,
                 decl: self.decl.clean(),
                 visibility: self.visibility,
                 generics: self.generics.clean(),
-            }
+            }),
         }
     }
 }
@@ -405,18 +411,18 @@ pub struct Trait {
     id: ast::NodeId,
 }
 
-impl Clean<Item<Trait>> for doctree::Trait {
-    pub fn clean(&self) -> Item<Trait> {
+impl Clean<Item> for doctree::Trait {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Trait {
+            inner: TraitItem(Trait {
                 methods: self.methods.clean(),
                 generics: self.generics.clean(),
                 parents: self.parents.clean(),
                 id: self.id
-            }
+            }),
         }
     }
 }
@@ -438,8 +444,8 @@ impl Clean<TraitRef> for ast::trait_ref {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub enum TraitMethod {
-    Required(Item<TyMethod>),
-    Provided(Item<Method>),
+    Required(Item),
+    Provided(Item),
 }
 
 impl TraitMethod {
@@ -533,8 +539,8 @@ pub struct StructField {
     visibility: Option<Visibility>,
 }
 
-impl Clean<Item<StructField>> for ast::struct_field {
-    pub fn clean(&self) -> Item<StructField> {
+impl Clean<Item> for ast::struct_field {
+    pub fn clean(&self) -> Item {
         let (name, vis) = match self.node.kind {
             ast::named_field(id, vis) => (Some(id), Some(vis)),
             _ => (None, None)
@@ -543,10 +549,10 @@ impl Clean<Item<StructField>> for ast::struct_field {
             name: name.clean(),
             attrs: collapse_docs(self.node.attrs.clean()),
             source: self.span.clean(),
-            inner: StructField {
+            inner: StructFieldItem(StructField {
                 type_: self.node.ty.clean(),
                 visibility: vis,
-            }
+            }),
         }
     }
 }
@@ -558,21 +564,21 @@ pub struct Struct {
     id: ast::NodeId,
     struct_type: doctree::StructType,
     generics: Generics,
-    fields: ~[Item<StructField>],
+    fields: ~[Item],
 }
 
-impl Clean<Item<Struct>> for doctree::Struct {
-    pub fn clean(&self) -> Item<Struct> {
+impl Clean<Item> for doctree::Struct {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Struct {
+            inner: StructItem(Struct {
                 id: self.id,
                 struct_type: self.struct_type,
                 generics: self.generics.clean(),
                 fields: self.fields.clean(),
-            }
+            }),
         }
     }
 }
@@ -599,7 +605,7 @@ pub fn path_to_str(p: &ast::Path) -> ~str {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct VariantStruct {
     struct_type: doctree::StructType,
-    fields: ~[Item<StructField>],
+    fields: ~[Item],
 }
 
 impl Clean<VariantStruct> for syntax::ast::struct_def {
@@ -613,22 +619,22 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Enum {
-    variants: ~[Item<Variant>],
+    variants: ~[Item],
     generics: Generics,
     id: ast::NodeId,
 }
 
-impl Clean<Item<Enum>> for doctree::Enum {
-    pub fn clean(&self) -> Item<Enum> {
+impl Clean<Item> for doctree::Enum {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Enum {
+            inner: EnumItem(Enum {
                 variants: self.variants.iter().transform(|x| x.clean()).collect(),
                 generics: self.generics.clean(),
                 id: self.id,
-            }
+            }),
         }
     }
 }
@@ -652,16 +658,16 @@ pub struct Variant {
     visibility: Visibility,
 }
 
-impl Clean<Item<Variant>> for doctree::Variant {
-    pub fn clean(&self) -> Item<Variant> {
+impl Clean<Item> for doctree::Variant {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Variant {
+            inner: VariantItem(Variant {
                 kind: self.kind.clean(),
                 visibility: self.visibility
-            }
+            }),
         }
     }
 }
@@ -741,17 +747,17 @@ pub struct Typedef {
     id: ast::NodeId,
 }
 
-impl Clean<Item<Typedef>> for doctree::Typedef {
-    pub fn clean(&self) -> Item<Typedef> {
+impl Clean<Item> for doctree::Typedef {
+    pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Typedef {
+            inner: TypedefItem(Typedef {
                 type_: self.ty.clean(),
                 generics: self.gen.clean(),
                 id: self.id.clone(),
-            }
+            }),
         }
     }
 }
@@ -788,18 +794,18 @@ pub struct Static {
     expr: ~str,
 }
 
-impl Clean<Item<Static>> for doctree::Static {
-    pub fn clean(&self) -> Item<Static> {
+impl Clean<Item> for doctree::Static {
+    pub fn clean(&self) -> Item {
         debug!("claning static %s: %?", self.name.clean(), self);
         Item {
             name: Some(self.name.clean()),
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Static {
+            inner: StaticItem(Static {
                 type_: self.type_.clean(),
                 mutability: self.mutability.clean(),
                 expr: self.expr.span.to_src(),
-            }
+            }),
         }
     }
 }
@@ -826,21 +832,21 @@ pub struct Impl {
     generics: Generics,
     trait_: Option<TraitRef>,
     for_: Type,
-    methods: ~[Item<Method>],
+    methods: ~[Item],
 }
 
-impl Clean<Item<Impl>> for doctree::Impl {
-    pub fn clean(&self) -> Item<Impl> {
+impl Clean<Item> for doctree::Impl {
+    pub fn clean(&self) -> Item {
         Item {
             name: None,
             attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
-            inner: Impl {
+            inner: ImplItem(Impl {
                 generics: self.generics.clean(),
                 trait_: self.trait_.clean(),
                 for_: self.for_.clean(),
                 methods: self.methods.clean(),
-            }
+            }),
         }
     }
 }
@@ -851,16 +857,16 @@ pub struct ViewItem {
     inner: ViewItemInner
 }
 
-impl Clean<Item<ViewItem>> for ast::view_item {
-    pub fn clean(&self) -> Item<ViewItem> {
+impl Clean<Item> for ast::view_item {
+    pub fn clean(&self) -> Item {
         Item {
             name: None,
             attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
-            inner: ViewItem {
+            inner: ViewItemItem(ViewItem {
                 vis: self.vis,
                 inner: self.node.clean()
-            }
+            }),
         }
     }
 }

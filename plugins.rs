@@ -3,8 +3,9 @@ use clean;
 use extra;
 use dl = std::unstable::dynamic_lib;
 
-pub type PluginResult = Option<(~str, extra::json::Json)>;
-pub type plugin_callback = extern fn (&mut clean::Crate) -> PluginResult;
+pub type PluginJson = Option<(~str, extra::json::Json)>;
+pub type PluginResult = (clean::Crate, PluginJson);
+pub type plugin_callback = extern fn (clean::Crate) -> PluginResult;
 
 /// Manages loading and running of plugins
 pub struct PluginManager {
@@ -46,8 +47,15 @@ impl PluginManager {
         self.callbacks.push(plugin);
     }
     /// Run all the loaded plugins over the crate, returning their results
-    pub fn run_plugins(&self, crate: &mut clean::Crate) -> ~[PluginResult] {
-        self.callbacks.iter().transform(|&x| x(crate)).collect()
+    pub fn run_plugins(&self, crate: clean::Crate) -> ~[PluginJson] {
+        let mut out_json = ~[];
+        let mut crate = crate;
+        for &callback in self.callbacks.iter() {
+            let (c, res) = callback(crate);
+            crate = c;
+            out_json.push(res);
+        }
+        out_json
     }
 }
 
