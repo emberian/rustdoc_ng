@@ -55,7 +55,7 @@ fn main() {
     let mut passes = if opt_present(&matches, "n") {
         ~[]
     } else {
-        ~[~"strip-hidden", ~"clean-comments"]
+        ~[~"strip-hidden", ~"clean-comments", ~"collapse-docs"]
     };
 
     opt_strs(&matches, "a").map(|x| passes.push(x.clone()));
@@ -79,6 +79,7 @@ fn main() {
         pm.add_plugin(match pass.as_slice() {
             "strip-hidden" => passes::strip_hidden,
             "clean-comments" => passes::clean_comments,
+            "collapse-docs" => passes::collapse_docs,
             s => { error!("unknown pass %s", s); passes::noop },
         })
     }

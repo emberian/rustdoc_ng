@@ -2,6 +2,8 @@
 extern mod extra;
 
 ///It holds fads
+///There are a lot so be careful
+///There are at least two kinds
 struct Fads<T,U> {
     ///hurr
     asdf: ~str,

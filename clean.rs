@@ -112,7 +112,7 @@ impl Clean<Item> for doctree::Module {
         };
         Item {
             name: Some(name),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: ModuleItem(Module {
                 items: std::vec::concat(&[self.structs.clean(),
@@ -228,7 +228,7 @@ impl Clean<Item> for ast::method {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.span.clean(),
             inner: MethodItem(Method {
                 generics: self.generics.clean(),
@@ -255,7 +255,7 @@ impl Clean<Item> for ast::TypeMethod {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.span.clean(),
             inner: TyMethodItem(TyMethod {
                 purity: self.purity.clone(),
@@ -302,7 +302,7 @@ impl Clean<Item> for doctree::Function {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: FunctionItem(Function {
                 id: self.id,
@@ -378,16 +378,6 @@ impl Clean<Argument> for ast::arg {
     }
 }
 
-impl Clean<Argument> for ast::arg {
-    pub fn clean(&self) -> Argument {
-        Argument {
-            mutable: self.is_mutbl,
-            ty: @(self.ty.clean()),
-            id: self.id
-        }
-    }
-}
-
 #[deriving(Clone, Encodable, Decodable)]
 pub enum RetStyle {
     NoReturn,
@@ -415,7 +405,7 @@ impl Clean<Item> for doctree::Trait {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: TraitItem(Trait {
                 methods: self.methods.clean(),
@@ -547,7 +537,7 @@ impl Clean<Item> for ast::struct_field {
         };
         Item {
             name: name.clean(),
-            attrs: collapse_docs(self.node.attrs.clean()),
+            attrs: self.node.attrs.clean(),
             source: self.span.clean(),
             inner: StructFieldItem(StructField {
                 type_: self.node.ty.clean(),
@@ -571,7 +561,7 @@ impl Clean<Item> for doctree::Struct {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: StructItem(Struct {
                 id: self.id,
@@ -581,22 +571,6 @@ impl Clean<Item> for doctree::Struct {
             }),
         }
     }
-}
-
-pub fn path_to_str(p: &ast::Path) -> ~str {
-    use syntax::parse::token::interner_get;
-
-    let mut s = ~"";
-    let mut first = true;
-    for i in p.idents.iter().transform(|x| interner_get(x.name)) {
-        if !first || p.global {
-            s.push_str("::");
-        } else {
-            first = false;
-        }
-        s.push_str(i);
-    }
-    s
 }
 
 /// This is a more limited form of the standard Struct, different in that it
@@ -628,26 +602,13 @@ impl Clean<Item> for doctree::Enum {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: EnumItem(Enum {
                 variants: self.variants.iter().transform(|x| x.clean()).collect(),
                 generics: self.generics.clean(),
                 id: self.id,
             }),
-        }
-    }
-}
-
-impl Clean<Enum> for doctree::Enum {
-    pub fn clean(&self) -> Enum {
-        Enum {
-            variants: self.variants.iter().transform(|x| x.clean()).collect(),
-            generics: self.generics.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            name: its(&self.name).to_owned(),
-            where: self.where.clean(),
-            node: self.id
         }
     }
 }
@@ -662,7 +623,7 @@ impl Clean<Item> for doctree::Variant {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: VariantItem(Variant {
                 kind: self.kind.clean(),
@@ -751,7 +712,7 @@ impl Clean<Item> for doctree::Typedef {
     pub fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: TypedefItem(Typedef {
                 type_: self.ty.clean(),
@@ -799,7 +760,7 @@ impl Clean<Item> for doctree::Static {
         debug!("claning static %s: %?", self.name.clean(), self);
         Item {
             name: Some(self.name.clean()),
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: StaticItem(Static {
                 type_: self.type_.clean(),
@@ -839,7 +800,7 @@ impl Clean<Item> for doctree::Impl {
     pub fn clean(&self) -> Item {
         Item {
             name: None,
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.where.clean(),
             inner: ImplItem(Impl {
                 generics: self.generics.clean(),
@@ -861,7 +822,7 @@ impl Clean<Item> for ast::view_item {
     pub fn clean(&self) -> Item {
         Item {
             name: None,
-            attrs: collapse_docs(self.attrs.clean()),
+            attrs: self.attrs.clean(),
             source: self.span.clean(),
             inner: ViewItemItem(ViewItem {
                 vis: self.vis,
@@ -926,6 +887,7 @@ impl ToSource for syntax::codemap::span {
             None    => ~""
         }
     }
+}
 
 fn lit_to_str(lit: &ast::lit) -> ~str {
     match lit.node {
@@ -974,37 +936,7 @@ fn remove_comment_tags(s: &str) -> ~str {
     }
 }
 
-enum CleanCommentStates {
-    Collect,
-    Strip,
-    Stripped,
-}
-
-fn clean_comment_body(s: ~str) -> ~str {
-    let mut res = ~"";
-    let mut state = Strip;
-
-    for s.iter().advance |char| {
-    for char in s.iter() {
-        match (state, char) {
-            (Strip, '*') => state = Stripped,
-            (Strip, '/') => state = Stripped,
-            (Stripped, '/') => state = Stripped,
-            (Strip, ' ') => (),
-            (Strip, '\t') => (),
-            (Stripped, ' ') => { res.push_char(char); state = Collect; }
-            (Stripped, '\t') => { res.push_char(char); state = Collect; }
-            (_, '\n') => { res.push_char(char); state = Strip; }
-            (_, char) => res.push_char(char)
-        }
-    }
-
-    res = res.trim().to_owned();
-    res.push_char('\n');
-    res
-}
-
-pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
+/*pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
     for at in attrs.iter() {
         match *at {
@@ -1019,7 +951,7 @@ pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     }).transform(|x| x.clone()).collect::<~[Attribute]>();
     a.push(NameValue(~"doc", docstr.trim().to_owned()));
     a
-}
+}*/
 
 /// Given a Type, resolve it using the def_map
 fn resolve_type(t: &Type) -> Type {
@@ -1110,6 +1042,7 @@ fn resolve_type(t: &Type) -> Type {
     } else {
         Resolved(def_id.node)
     }
+}
 
 #[cfg(test)]
 mod tests {

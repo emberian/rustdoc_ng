@@ -84,7 +84,7 @@ pub trait DocFolder {
         let mut mod_ = None;
         std::util::swap(&mut mod_, &mut c.module);
         let mod_ = mod_.unwrap();
-        c.module = self.fold_item(mod_);
+        c.module = self.fold_item_recur(mod_);
         let Crate { name, attrs, module } = c;
         match module {
             Some(Item { inner: ModuleItem(m), name: name_, attrs: attrs_, source }) => {
