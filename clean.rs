@@ -936,36 +936,7 @@ fn remove_comment_tags(s: &str) -> ~str {
     }
 }
 
-enum CleanCommentStates {
-    Collect,
-    Strip,
-    Stripped,
-}
-
-fn clean_comment_body(s: ~str) -> ~str {
-    let mut res = ~"";
-    let mut state = Strip;
-
-    for char in s.iter() {
-        match (state, char) {
-            (Strip, '*') => state = Stripped,
-            (Strip, '/') => state = Stripped,
-            (Stripped, '/') => state = Stripped,
-            (Strip, ' ') => (),
-            (Strip, '\t') => (),
-            (Stripped, ' ') => state = Collect,
-            (Stripped, '\t') => state = Collect,
-            (_, '\n') => { res.push_char(char); state = Strip; }
-            (_, char) => res.push_char(char)
-        }
-    }
-
-    res = res.trim().to_owned();
-    res.push_char('\n');
-    res
-}
-
-pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
+/*pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
     for at in attrs.iter() {
         match *at {
@@ -980,7 +951,7 @@ pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     }).transform(|x| x.clone()).collect::<~[Attribute]>();
     a.push(NameValue(~"doc", docstr.trim().to_owned()));
     a
-}
+}*/
 
 /// Given a Type, resolve it using the def_map
 fn resolve_type(t: &Type) -> Type {
