@@ -12,81 +12,96 @@ extern mod rustc;
 
 extern mod extra;
 
-use rustc::{front, metadata, driver, middle};
+use std::cell::Cell;
+use extra::serialize::Encodable;
 
-use syntax::parse;
-use syntax::ast;
-use syntax::ast_map;
-
-use std::os;
-use std::local_data;
-use extra::json::ToJson;
-
-use syntax::visit::Visitor;
-
-use visit::RustdocVisitor;
-use clean::Clean;
-
+pub mod core;
 pub mod doctree;
 pub mod clean;
-pub mod jsonify;
-pub mod visit;
+pub mod visit_ast;
+pub mod plugins;
+mod passes;
 
-pub static ctxtkey: local_data::Key<@DocContext> = &local_data::Key;
+pub static SCHEMA_VERSION: &'static str = "0.6.0";
 
-struct DocContext {
-    crate: @ast::Crate,
-    tycx: middle::ty::ctxt,
-    sess: driver::session::Session
-}
+pub static ctxtkey: std::local_data::Key<@core::DocContext> = &std::local_data::Key;
 
-/// Parses, resolves, and typechecks the given crate
-fn get_ast_and_resolve(cpath: &Path, libs: ~[Path]) -> DocContext {
-    let parsesess = parse::new_parse_sess(None);
-    let sessopts = @driver::session::options {
-        binary: @"rustdoc",
-        maybe_sysroot: Some(@std::os::self_exe_path().get().pop()),
-        addl_lib_search_paths: @mut libs,
-        .. (*rustc::driver::session::basic_options()).clone()
-    };
-
-
-    let diagnostic_handler = syntax::diagnostic::mk_handler(None);
-    let span_diagnostic_handler =
-        syntax::diagnostic::mk_span_handler(diagnostic_handler, parsesess.cm);
-
-    let mut sess = driver::driver::build_session_(sessopts, parsesess.cm,
-                                                  syntax::diagnostic::emit,
-                                                  span_diagnostic_handler);
-
-    let (crate, tycx) = driver::driver::compile_upto(sess, sessopts.cfg.clone(),
-                                                     &driver::driver::file_input(cpath.clone()),
-                                                     driver::driver::cu_typeck, None);
-
-    DocContext { crate: crate.unwrap(), tycx: tycx.unwrap(), sess: sess }
-}
 
 fn main() {
     use extra::getopts::*;
-    use std::hashmap::HashMap;
+    use extra::getopts::groups::*;
 
-    let args = os::args();
+    let args = std::os::args();
     let opts = ~[
-        optmulti("L")
+        optmulti("L", "library-path", "directory to add to crate search path", "DIR"),
+        optmulti("p", "plugin", "plugin to load and run", "NAME"),
+        optmulti("", "plugin-path", "directory to load plugins from", "DIR"),
+        // auxillary pass (defaults to hidden_strip
+        optmulti("a", "pass", "auxillary pass to run", "NAME"),
+        optflag("n", "no-defult-passes", "do not run the default passes"),
+        optflag("h", "help", "show this help message"),
     ];
-    let matches = getopts(args.tail(), opts).get();
-    let libs = opt_strs(&matches, "L").map(|s| Path(*s));
 
-    let ctxt = @get_ast_and_resolve(&Path(matches.free[0]), libs);
-    debug!("defmap:");
-    for ctxt.tycx.def_map.iter().advance |(k, v)| {
-        debug!("%?: %?", k, v);
+    let matches = getopts(args.tail(), opts).unwrap();
+
+    if opt_present(&matches, "h") || opt_present(&matches, "help") {
+        println(usage(args[0], opts));
+        return;
     }
-    local_data::set(ctxtkey, ctxt);
 
-    let mut v = @mut RustdocVisitor::new();
-    v.visit(ctxt.crate);
+    let libs = Cell::new(opt_strs(&matches, "L").map(|s| Path(*s)));
 
-    let mut crate = v.clean();
-    println(crate.to_json().to_str());
+    let mut passes = if opt_present(&matches, "n") {
+        ~[]
+    } else {
+        ~[~"strip-hidden", ~"clean-comments"]
+    };
+
+    opt_strs(&matches, "a").map(|x| passes.push(x.clone()));
+
+    if matches.free.len() != 1 {
+        println(usage(args[0], opts));
+        return;
+    }
+
+    let cr = Cell::new(Path(matches.free[0]));
+
+    let mut crate = std::task::try(|| {let cr = cr.take(); core::run_core(libs.take(), &cr)}).unwrap();
+
+    // { "schema": version, "crate": { parsed crate ... }, "plugins": { output of plugins ... }}
+    let mut json = ~extra::treemap::TreeMap::new();
+    json.insert(~"schema", extra::json::String(SCHEMA_VERSION.to_owned()));
+
+    // FIXME: yuck, Rust -> str -> JSON round trip! No way to .encode
+    // straight to the Rust JSON representation.
+    let crate_json_str = do std::io::with_str_writer |w| {
+        crate.encode(&mut extra::json::Encoder(w));
+    };
+    let crate_json = match extra::json::from_str(crate_json_str) {
+        Ok(j) => j,
+        Err(_) => fail!("Rust generated JSON is invalid??")
+    };
+
+    json.insert(~"crate", crate_json);
+
+    let mut pm = plugins::PluginManager::new(Path("/tmp/rustdoc_ng/plugins"));
+
+    for pass in passes.iter() {
+        pm.add_plugin(match pass.as_slice() {
+            "strip-hidden" => passes::strip_hidden,
+            "clean-comments" => passes::clean_comments,
+            s => { error!("unknown pass %s", s); passes::noop },
+        })
+    }
+
+    for pname in opt_strs(&matches, "p").consume_iter() {
+        pm.load_plugin(pname);
+    }
+
+    let res = pm.run_plugins(&mut crate);
+    let plugins_json = ~res.consume_iter().filter_map(|opt| opt).collect();
+
+    json.insert(~"plugins", extra::json::Object(plugins_json));
+
+    println(extra::json::Object(json).to_str());
 }

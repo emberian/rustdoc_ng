@@ -1,10 +1,14 @@
+//! This module contains the "cleaned" pieces of the AST, and the functions
+//! that clean them.
+
 use its = syntax::parse::token::ident_to_str;
 
+use rustc::metadata::{csearch,decoder,cstore};
 use syntax;
 use syntax::ast;
 
 use doctree;
-use visit;
+use visit_ast;
 use std::local_data;
 
 pub trait Clean<T> {
@@ -16,16 +20,42 @@ impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
         self.iter().transform(|x| x.clean()).collect()
     }
 }
+impl<T: Clean<U>, U> Clean<U> for @T {
+    pub fn clean(&self) -> U {
+        (**self).clean()
+    }
+}
 
+impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
+    pub fn clean(&self) -> Option<U> {
+        match self {
+            &None => None,
+            &Some(ref v) => Some(v.clean())
+        }
+    }
+}
+
+impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
+    pub fn clean(&self) -> ~[U] {
+        match self {
+            &syntax::opt_vec::Empty => ~[],
+            &syntax::opt_vec::Vec(ref v) => v.clean()
+        }
+    }
+}
+
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Crate {
     name: ~str,
     attrs: ~[Attribute],
-    mods: ~[Module],
+    module: Item<Module>,
 }
 
-impl Clean<Crate> for visit::RustdocVisitor {
+impl Clean<Crate> for visit_ast::RustdocVisitor {
     pub fn clean(&self) -> Crate {
         use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
+        let maybe_meta = last_meta_item_value_str_by_name(find_linkage_metas(self.attrs), "name");
+
         Crate {
             name: match maybe_meta {
                 Some(x) => x.to_owned(),
@@ -37,19 +67,36 @@ impl Clean<Crate> for visit::RustdocVisitor {
     }
 }
 
-pub struct Module {
-    name: ~str,
+/// Anything with a source location and set of attributes and, optionally, a
+/// name. That is, anything that can be documented. This doesn't correspond
+/// directly to the AST's concept of an item; it's a strict superset.
+#[deriving(Clone, Encodable, Decodable)]
+pub struct Item<T> {
+    /// Stringified span
+    source: ~str,
+    /// Not everything has a name. E.g., impls
+    name: Option<~str>,
     attrs: ~[Attribute],
-    structs: ~[Struct],
-    enums: ~[Enum],
-    fns: ~[Function],
-    mods: ~[Module],
+    inner: T,
 }
 
-impl Clean<Module> for doctree::Module {
-    pub fn clean(&self) -> Module {
+#[deriving(Clone, Encodable, Decodable)]
+pub struct Module {
+    structs: ~[Item<Struct>],
+    enums: ~[Item<Enum>],
+    fns: ~[Item<Function>],
+    mods: ~[Item<Module>],
+    typedefs: ~[Item<Typedef>],
+    statics: ~[Item<Static>],
+    traits: ~[Item<Trait>],
+    impls: ~[Item<Impl>],
+    view_items: ~[Item<ViewItem>],
+}
+
+impl Clean<Item<Module>> for doctree::Module {
+    pub fn clean(&self) -> Item<Module> {
         let name = if self.name.is_some() {
-            its(&self.name.unwrap()).to_owned()
+            self.name.unwrap().clean()
         } else {
             ~""
         };
@@ -72,70 +119,72 @@ impl Clean<Module> for doctree::Module {
     }
 }
 
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Attribute {
     Word(~str),
     List(~str, ~[Attribute]),
     NameValue(~str, ~str)
 }
 
-impl Clean<Attribute> for ast::MetaItem_ {
+impl Clean<Attribute> for ast::MetaItem {
     pub fn clean(&self) -> Attribute {
-        match *self {
-            ast::MetaWord(s) => Word(remove_comment_tags(s)),
-            ast::MetaList(ref s, ref l) => List(remove_comment_tags(*s), l.iter()
-                                         .transform(|x| x.node.clean()).collect()),
-            ast::MetaNameValue(s, ref v) => NameValue(remove_comment_tags(s),
-                                         remove_comment_tags(lit_to_str(v)))
+        match self.node {
+            ast::MetaWord(s) => Word(s.to_owned()),
+            ast::MetaList(ref s, ref l) => List(s.to_owned(), l.clean()),
+            ast::MetaNameValue(s, ref v) => NameValue(s.to_owned(), lit_to_str(v))
         }
     }
 }
 
 impl Clean<Attribute> for ast::Attribute {
     pub fn clean(&self) -> Attribute {
-        self.node.value.node.clean()
+        self.node.value.clean()
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct TyParam {
     name: ~str,
-    node: ast::node_id,
+    id: ast::NodeId,
     bounds: ~[TyParamBound]
 }
 
 impl Clean<TyParam> for ast::TyParam {
     pub fn clean(&self) -> TyParam {
         TyParam {
-            name: its(&self.ident).to_owned(),
-            node: self.id,
+            name: self.ident.clean(),
+            id: self.id,
             bounds: self.bounds.iter().transform(|x| x.clean()).collect()
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum TyParamBound {
     RegionBound,
-    TraitBound(Trait)
+    TraitBound(TraitRef)
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
     pub fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
-            ast::TraitTyParamBound(_) => TraitBound(Trait::new())
+            ast::TraitTyParamBound(ref t) => TraitBound(t.clean()),
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
     pub fn clean(&self) -> Lifetime {
-        Lifetime(its(&self.ident).to_owned())
+        Lifetime(self.ident.clean())
     }
 }
 
 // maybe use a Generic enum and use ~[Generic]?
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Generics {
     lifetimes: ~[Lifetime],
     type_params: ~[TyParam]
@@ -159,13 +208,14 @@ impl Clean<Generics> for ast::Generics {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Method {
-    ident: ~str,
-    attrs: ~[Attribute],
     generics: Generics,
-    //explicit_self: ExplicitSelf,
-    id: ast::node_id,
-    vis: Visibility
+    self_: SelfTy,
+    purity: ast::purity,
+    decl: FnDecl,
+    id: ast::NodeId,
+    vis: Visibility,
 }
 
 impl Clean<Item<Method>> for ast::method {
@@ -188,8 +238,8 @@ impl Clean<Item<Method>> for ast::method {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct TyMethod {
-    ident: ~str,
-    attrs: ~[Attribute],
+    purity: ast::purity,
+    decl: FnDecl,
     generics: Generics,
     id: ast::NodeId,
     self_: SelfTy,
@@ -212,18 +262,31 @@ impl Clean<Item<TyMethod>> for ast::TypeMethod {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
+pub enum SelfTy {
+    SelfStatic,
+    SelfValue,
+    SelfBorrowed(Option<Lifetime>, Mutability),
+    SelfManaged(Mutability),
+    SelfOwned,
 }
 
-pub enum TraitMethod {
-    Required(TyMethod),
-    Provided(Method)
+impl Clean<SelfTy> for ast::explicit_self {
+    pub fn clean(&self) -> SelfTy {
+        match self.node {
+            ast::sty_static => SelfStatic,
+            ast::sty_value => SelfValue,
+            ast::sty_uniq => SelfOwned,
+            ast::sty_region(lt, mt) => SelfBorrowed(lt.clean(), mt.clean()),
+            ast::sty_box(mt) => SelfManaged(mt.clean()),
+        }
+    }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Function {
     decl: FnDecl,
-    name: ~str,
     visibility: Visibility,
-    where: ~str,
     generics: Generics,
     //body: Block,
     id: ast::NodeId,
@@ -256,24 +319,27 @@ pub struct ClosureDecl {
     bounds: ~[TyParamBound]
 }
 
-impl Clean<Function> for doctree::Function {
-    pub fn clean(&self) -> Function {
-        Function {
+impl Clean<ClosureDecl> for ast::TyClosure {
+    pub fn clean(&self) -> ClosureDecl {
+        ClosureDecl {
+            sigil: self.sigil,
+            region: self.region.clean(),
+            lifetimes: self.lifetimes.clean(),
             decl: self.decl.clean(),
-            name: its(&self.name).to_owned(),
-            id: self.id,
-            attrs: collapse_docs(self.attrs.clean()),
-            where: self.where.clean(),
-            visibility: self.visibility,
-            generics: self.generics.clean(),
+            onceness: self.onceness,
+            purity: self.purity,
+            bounds: match self.bounds {
+                Some(ref x) => x.clean(),
+                None        => ~[]
+            },
         }
     }
 }
 
-
+#[deriving(Clone, Encodable, Decodable)]
 pub struct FnDecl {
     inputs: ~[Argument],
-    output: @Type,
+    output: Type,
     cf: RetStyle,
     attrs: ~[Attribute]
 }
@@ -282,19 +348,28 @@ impl Clean<FnDecl> for ast::fn_decl {
     pub fn clean(&self) -> FnDecl {
         FnDecl {
             inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
-            output: @(self.output.clean()),
+            output: (self.output.clean()),
             cf: self.cf.clean(),
             attrs: ~[]
         }
     }
 }
 
-
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Argument {
-    mutable: bool,
-    ty: @Type,
-    //TODO pat
-    id: ast::node_id
+    ty: Type,
+    name: ~str,
+    id: ast::NodeId
+}
+
+impl Clean<Argument> for ast::arg {
+    pub fn clean(&self) -> Argument {
+        Argument {
+            name: name_from_pat(self.pat),
+            ty: (self.ty.clean()),
+            id: self.id
+        }
+    }
 }
 
 impl Clean<Argument> for ast::arg {
@@ -307,6 +382,7 @@ impl Clean<Argument> for ast::arg {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum RetStyle {
     NoReturn,
     Return
@@ -321,6 +397,7 @@ impl Clean<RetStyle> for ast::ret_style {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Trait {
     methods: ~[TraitMethod],
     generics: Generics,
@@ -380,13 +457,11 @@ impl TraitMethod {
     }
 }
 
-impl Trait {
-    pub fn new() -> Trait {
-        Trait {
-            name: ~"",
-            methods: ~[],
-            lifetimes: ~[],
-            generics: Generics::new()
+impl Clean<TraitMethod> for ast::trait_method {
+    pub fn clean(&self) -> TraitMethod {
+        match self {
+            &ast::required(ref t) => Required(t.clean()),
+            &ast::provided(ref t) => Provided(t.clean()),
         }
     }
 }
@@ -394,28 +469,37 @@ impl Trait {
 /// A representation of a Type suitable for hyperlinking purposes. Ideally one can get the original
 /// type out of the AST/ty::ctxt given one of these, if more information is needed. Most importantly
 /// it does not preserve mutability or boxes.
-#[deriving(Clone)]
+#[deriving(Clone, Encodable, Decodable)]
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
-    Unresolved(ast::node_id),
+    Unresolved(ast::NodeId),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
-    Resolved(ast::node_id),
+    Resolved(ast::NodeId),
+    /// Reference to an item in an external crate (fully qualified path)
+    External(~str, ~str),
     /// For parameterized types, so the consumer of the JSON don't go looking
     /// for types which don't exist anywhere.
-    Generic(ast::node_id),
+    Generic(ast::NodeId),
     /// For references to self
-    Self(ast::node_id),
+    Self(ast::NodeId),
     /// Primitives are just the fixed-size numeric types (plus int/uint/float), and char.
     Primitive(ast::prim_ty),
+    Closure(~ClosureDecl),
+    /// extern "ABI" fn
+    BareFunction(~BareFunctionDecl),
     Tuple(~[Type]),
     Vector(~Type),
     String,
     Bool,
     /// aka ty_nil
     Unit,
+    /// aka ty_bot
+    Bottom,
     Unique(~Type),
     Managed(~Type),
+    RawPointer(~Type),
+    BorrowedRef(~Type),
     // region, raw, other boxes, mutable
 }
 
@@ -425,24 +509,27 @@ impl Clean<Type> for ast::Ty {
         debug!("cleaning type `%?`", self);
         let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
-        let mut t = match self.node {
+        let t = match self.node {
             ty_nil => Unit,
-            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
+            ty_ptr(ref m) =>  RawPointer(~resolve_type(&m.ty.clean())),
+            ty_rptr(_, ref m) => BorrowedRef(~resolve_type(&m.ty.clean())),
             ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
             ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
             ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(_, _, id) => Unresolved(id),
-            _ => fail!("Unimplemented type (this is a bug)"),
+            ty_closure(ref c) => Closure(~c.clean()),
+            ty_bare_fn(ref barefn) => BareFunction(~barefn.clean()),
+            ty_bot => Bottom,
+            ref x => fail!("Unimplemented type %?", x),
         };
         resolve_type(&t)
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct StructField {
-    name: ~str,
     type_: Type,
-    attrs: ~[Attribute],
     visibility: Option<Visibility>,
 }
 
@@ -466,14 +553,12 @@ impl Clean<Item<StructField>> for ast::struct_field {
 
 pub type Visibility = ast::visibility;
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Struct {
-    name: ~str,
-    where: ~str,
-    node: ast::node_id,
+    id: ast::NodeId,
     struct_type: doctree::StructType,
-    attrs: ~[Attribute],
     generics: Generics,
-    fields: ~[StructField],
+    fields: ~[Item<StructField>],
 }
 
 impl Clean<Item<Struct>> for doctree::Struct {
@@ -492,31 +577,45 @@ impl Clean<Item<Struct>> for doctree::Struct {
     }
 }
 
+pub fn path_to_str(p: &ast::Path) -> ~str {
+    use syntax::parse::token::interner_get;
+
+    let mut s = ~"";
+    let mut first = true;
+    for i in p.idents.iter().transform(|x| interner_get(x.name)) {
+        if !first || p.global {
+            s.push_str("::");
+        } else {
+            first = false;
+        }
+        s.push_str(i);
+    }
+    s
+}
+
 /// This is a more limited form of the standard Struct, different in that it
 /// it lacks the things most items have (name, id, parameterization). Found
 /// only as a variant in an enum.
+#[deriving(Clone, Encodable, Decodable)]
 pub struct VariantStruct {
     struct_type: doctree::StructType,
-    fields: ~[StructField],
+    fields: ~[Item<StructField>],
 }
 
 impl Clean<VariantStruct> for syntax::ast::struct_def {
     pub fn clean(&self) -> VariantStruct {
         VariantStruct {
             struct_type: doctree::struct_type_from_def(self),
-            fields: self.fields.iter().transform(
-                                       |x| doctree::StructField::new(&x.node).clean()).collect()
+            fields: self.fields.clean(),
         }
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Enum {
-    variants: ~[Variant],
+    variants: ~[Item<Variant>],
     generics: Generics,
-    attrs: ~[Attribute],
-    name: ~str,
-    node: ast::node_id,
-    where: ~str,
+    id: ast::NodeId,
 }
 
 impl Clean<Item<Enum>> for doctree::Enum {
@@ -534,9 +633,21 @@ impl Clean<Item<Enum>> for doctree::Enum {
     }
 }
 
+impl Clean<Enum> for doctree::Enum {
+    pub fn clean(&self) -> Enum {
+        Enum {
+            variants: self.variants.iter().transform(|x| x.clean()).collect(),
+            generics: self.generics.clean(),
+            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
+            name: its(&self.name).to_owned(),
+            where: self.where.clean(),
+            node: self.id
+        }
+    }
+}
+
+#[deriving(Clone, Encodable, Decodable)]
 pub struct Variant {
-    name: ~str,
-    attrs: ~[Attribute],
     kind: VariantKind,
     visibility: Visibility,
 }
@@ -555,6 +666,7 @@ impl Clean<Item<Variant>> for doctree::Variant {
     }
 }
 
+#[deriving(Clone, Encodable, Decodable)]
 pub enum VariantKind {
     CLikeVariant,
     TupleVariant(~[Type]),
@@ -575,7 +687,6 @@ impl Clean<VariantKind> for ast::variant_kind {
         }
     }
 }
-
 
 impl Clean<~str> for syntax::codemap::span {
     pub fn clean(&self) -> ~str {
@@ -809,7 +920,6 @@ impl ToSource for syntax::codemap::span {
             None    => ~""
         }
     }
-}
 
 fn lit_to_str(lit: &ast::lit) -> ~str {
     match lit.node {
@@ -825,11 +935,36 @@ fn lit_to_str(lit: &ast::lit) -> ~str {
     }
 }
 
+fn name_from_pat(p: &ast::pat) -> ~str {
+    use syntax::ast::*;
+    match p.node {
+        pat_wild => ~"_",
+        pat_ident(_, ref p, _) => path_to_str(p),
+        pat_enum(ref p, _) => path_to_str(p),
+        pat_struct(*) => fail!("tried to get argument name from pat_struct, \
+                                 which is not allowed in function arguments"),
+        pat_tup(*) => ~"(tuple arg NYI)",
+        pat_box(p) => name_from_pat(p),
+        pat_uniq(p) => name_from_pat(p),
+        pat_region(p) => name_from_pat(p),
+        pat_lit(*) => fail!("tried to get argument name from pat_lit, \
+                             which is not allowed in function arguments"),
+        pat_range(*) => fail!("tried to get argument name from pat_range, \
+                               which is not allowed in function arguments"),
+        pat_vec(*) => fail!("tried to get argument name from pat_vec, \
+                             which is not allowed in function arguments")
+    }
+}
+
 fn remove_comment_tags(s: &str) -> ~str {
-    match s.slice(0,3) {
-        &"///" => return s.slice(3, s.len()).trim().to_owned(),
-        &"/**" | &"/*!" => return s.slice(3, s.len() - 2).trim().to_owned(),
-        _ => return s.trim().to_owned()
+    if s.starts_with("/") {
+        match s.slice(0,3) {
+            &"///" => return s.slice(3, s.len()).trim().to_owned(),
+            &"/**" | &"/*!" => return s.slice(3, s.len() - 2).trim().to_owned(),
+            _ => return s.trim().to_owned()
+        }
+    } else {
+        return s.to_owned();
     }
 }
 
@@ -844,6 +979,7 @@ fn clean_comment_body(s: ~str) -> ~str {
     let mut state = Strip;
 
     for s.iter().advance |char| {
+    for char in s.iter() {
         match (state, char) {
             (Strip, '*') => state = Stripped,
             (Strip, '/') => state = Stripped,
@@ -864,7 +1000,7 @@ fn clean_comment_body(s: ~str) -> ~str {
 
 pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
-    for attrs.iter().advance |at| {
+    for at in attrs.iter() {
         match *at {
             //XXX how should these be separated?
             NameValue(~"doc", ref s) => docstr.push_str(fmt!("%s ", clean_comment_body(s.clone()))),
@@ -885,7 +1021,7 @@ fn resolve_type(t: &Type) -> Type {
 
     let id = match t {
         &Unresolved(id) => id,
-        _ => return (*t).clone()
+        _ => return (*t).clone(),
     };
 
     let dm = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.def_map;
@@ -896,17 +1032,17 @@ fn resolve_type(t: &Type) -> Type {
             let ctxt = local_data::get(super::ctxtkey, |x| *x.unwrap());
             debug!("could not find %? in defmap (`%s`)", id,
                    syntax::ast_map::node_id_to_str(ctxt.tycx.items, id, ctxt.sess.intr()));
-            fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)");
+            fail!("Unexpected failure: unresolved id not in defmap (this is a bug!)")
         }
     };
 
-    Resolved(match *d {
-        def_fn(i, _) => i.node,
+    let def_id = match *d {
+        def_fn(i, _) => i,
         def_self(i, _) | def_self_ty(i) => return Self(i),
-        def_ty(i) => i.node,
+        def_ty(i) => i,
         def_trait(i) => {
             debug!("saw def_trait in def_to_id");
-            i.node
+            i
         },
         def_prim_ty(p) => match p {
             ty_str => return String,
@@ -914,11 +1050,60 @@ fn resolve_type(t: &Type) -> Type {
             _ => return Primitive(p)
         },
         def_ty_param(i, _) => return Generic(i.node),
-        def_struct(i) => i.node,
-        def_typaram_binder(i) => i,
-        _ => fail!("resolved type maps to a weird def"),
-    })
-}
+        def_struct(i) => i,
+        def_typaram_binder(i) => return Resolved(i),
+        x => fail!("resolved type maps to a weird def %?", x),
+    };
+
+    if def_id.crate != ast::CRATE_NODE_ID {
+        let sess = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess;
+        let mut path = ~"";
+        let mut ty = ~"";
+        do csearch::each_path(sess.cstore, def_id.crate) |pathstr, deflike, _vis| {
+            match deflike {
+                decoder::dl_def(di) => {
+                    let d2 = match di {
+                        def_fn(i, _) | def_ty(i) | def_trait(i) |
+                            def_struct(i) | def_mod(i) => Some(i),
+                        _ => None,
+                    };
+                    if d2.is_some() {
+                        let d2 = d2.unwrap();
+                        if def_id.node == d2.node {
+                            debug!("found external def: %?", di);
+                            path = pathstr.to_owned();
+                            ty = match di {
+                                def_fn(*) => ~"fn",
+                                def_ty(*) => ~"enum",
+                                def_trait(*) => ~"trait",
+                                def_prim_ty(p) => match p {
+                                    ty_str => ~"str",
+                                    ty_bool => ~"bool",
+                                    ty_int(t) => match t.to_str() {
+                                        ~"" => ~"i",
+                                        s => s
+                                    },
+                                    ty_uint(t) => t.to_str(),
+                                    ty_float(t) => t.to_str()
+                                },
+                                def_ty_param(*) => ~"generic",
+                                def_struct(*) => ~"struct",
+                                def_typaram_binder(*) => ~"typaram_binder",
+                                x => fail!("resolved external maps to a weird def %?", x),
+                            };
+
+                        }
+                    }
+                },
+                _ => (),
+            };
+            true
+        };
+        let cname = cstore::get_crate_data(sess.cstore, def_id.crate).name.to_owned();
+        External(cname + "::" + path, ty)
+    } else {
+        Resolved(def_id.node)
+    }
 
 #[cfg(test)]
 mod tests {
