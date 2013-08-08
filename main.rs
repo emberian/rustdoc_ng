@@ -23,7 +23,7 @@ pub mod fold;
 pub mod plugins;
 mod passes;
 
-pub static SCHEMA_VERSION: &'static str = "0.6.0";
+pub static SCHEMA_VERSION: &'static str = "0.7.0";
 
 pub static ctxtkey: std::local_data::Key<@core::DocContext> = &std::local_data::Key;
 
@@ -73,18 +73,6 @@ fn main() {
     let mut json = ~extra::treemap::TreeMap::new();
     json.insert(~"schema", extra::json::String(SCHEMA_VERSION.to_owned()));
 
-    // FIXME: yuck, Rust -> str -> JSON round trip! No way to .encode
-    // straight to the Rust JSON representation.
-    let crate_json_str = do std::io::with_str_writer |w| {
-        crate.encode(&mut extra::json::Encoder(w));
-    };
-    let crate_json = match extra::json::from_str(crate_json_str) {
-        Ok(j) => j,
-        Err(_) => fail!("Rust generated JSON is invalid??")
-    };
-
-    json.insert(~"crate", crate_json);
-
     let mut pm = plugins::PluginManager::new(Path("/tmp/rustdoc_ng/plugins"));
 
     for pass in passes.iter() {
@@ -99,9 +87,20 @@ fn main() {
         pm.load_plugin(pname);
     }
 
-    let res = pm.run_plugins(crate);
+    let (crate, res) = pm.run_plugins(crate);
     let plugins_json = ~res.consume_iter().filter_map(|opt| opt).collect();
 
+    // FIXME: yuck, Rust -> str -> JSON round trip! No way to .encode
+    // straight to the Rust JSON representation.
+    let crate_json_str = do std::io::with_str_writer |w| {
+        crate.encode(&mut extra::json::Encoder(w));
+    };
+    let crate_json = match extra::json::from_str(crate_json_str) {
+        Ok(j) => j,
+        Err(_) => fail!("Rust generated JSON is invalid??")
+    };
+
+    json.insert(~"crate", crate_json);
     json.insert(~"plugins", extra::json::Object(plugins_json));
 
     println(extra::json::Object(json).to_str());

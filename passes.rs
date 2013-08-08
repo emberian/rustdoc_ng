@@ -29,7 +29,7 @@ pub fn strip_hidden(crate: clean::Crate) -> plugins::PluginResult {
                     _ => ()
                 }
             }
-            Some(i)
+            self.fold_item_recur(i)
         }
     }
     let mut stripper = Stripper;
