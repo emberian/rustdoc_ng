@@ -62,7 +62,7 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
                 None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
             },
             module: self.module.clean(),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
         }
     }
 }
@@ -102,7 +102,7 @@ impl Clean<Item<Module>> for doctree::Module {
         };
         Item {
             name: Some(name),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Module {
                 structs    : self.structs.clean(),
@@ -222,7 +222,7 @@ impl Clean<Item<Method>> for ast::method {
     pub fn clean(&self) -> Item<Method> {
         Item {
             name: Some(self.ident.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
             inner: Method {
                 generics: self.generics.clean(),
@@ -249,7 +249,7 @@ impl Clean<Item<TyMethod>> for ast::TypeMethod {
     pub fn clean(&self) -> Item<TyMethod> {
         Item {
             name: Some(self.ident.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
             inner: TyMethod {
                 purity: self.purity.clone(),
@@ -296,7 +296,7 @@ impl Clean<Item<Function>> for doctree::Function {
     pub fn clean(&self) -> Item<Function> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Function {
                 id: self.id,
@@ -399,7 +399,7 @@ impl Clean<Item<Trait>> for doctree::Trait {
     pub fn clean(&self) -> Item<Trait> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Trait {
                 methods: self.methods.clean(),
@@ -531,7 +531,7 @@ impl Clean<Item<StructField>> for ast::struct_field {
         };
         Item {
             name: name.clean(),
-            attrs: self.node.attrs.clean(),
+            attrs: collapse_docs(self.node.attrs.clean()),
             source: self.span.clean(),
             inner: StructField {
                 type_: self.node.ty.clean(),
@@ -555,7 +555,7 @@ impl Clean<Item<Struct>> for doctree::Struct {
     pub fn clean(&self) -> Item<Struct> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Struct {
                 id: self.id,
@@ -596,7 +596,7 @@ impl Clean<Item<Enum>> for doctree::Enum {
     pub fn clean(&self) -> Item<Enum> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Enum {
                 variants: self.variants.iter().transform(|x| x.clean()).collect(),
@@ -617,7 +617,7 @@ impl Clean<Item<Variant>> for doctree::Variant {
     pub fn clean(&self) -> Item<Variant> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Variant {
                 kind: self.kind.clean(),
@@ -706,7 +706,7 @@ impl Clean<Item<Typedef>> for doctree::Typedef {
     pub fn clean(&self) -> Item<Typedef> {
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Typedef {
                 type_: self.ty.clean(),
@@ -754,7 +754,7 @@ impl Clean<Item<Static>> for doctree::Static {
         debug!("claning static %s: %?", self.name.clean(), self);
         Item {
             name: Some(self.name.clean()),
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Static {
                 type_: self.type_.clean(),
@@ -794,7 +794,7 @@ impl Clean<Item<Impl>> for doctree::Impl {
     pub fn clean(&self) -> Item<Impl> {
         Item {
             name: None,
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.where.clean(),
             inner: Impl {
                 generics: self.generics.clean(),
@@ -816,7 +816,7 @@ impl Clean<Item<ViewItem>> for ast::view_item {
     pub fn clean(&self) -> Item<ViewItem> {
         Item {
             name: None,
-            attrs: self.attrs.clean(),
+            attrs: collapse_docs(self.attrs.clean()),
             source: self.span.clean(),
             inner: ViewItem {
                 vis: self.vis,
@@ -947,8 +947,8 @@ fn clean_comment_body(s: ~str) -> ~str {
             (Stripped, '/') => state = Stripped,
             (Strip, ' ') => (),
             (Strip, '\t') => (),
-            (Stripped, ' ') => state = Collect,
-            (Stripped, '\t') => state = Collect,
+            (Stripped, ' ') => { res.push_char(char); state = Collect; }
+            (Stripped, '\t') => { res.push_char(char); state = Collect; }
             (_, '\n') => { res.push_char(char); state = Strip; }
             (_, char) => res.push_char(char)
         }
@@ -1090,132 +1090,3 @@ mod tests {
         }
     }
 }
-<<<<<<< HEAD
-
-impl Clean<Type> for ast::Ty {
-    pub fn clean(&self) -> Type {
-        use syntax::ast::*;
-        debug!("cleaning type `%?`", self);
-        let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
-        debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
-        let mut t = match self.node {
-            ty_nil => Unit,
-            ty_ptr(ref m) | ty_rptr(_, ref m) => resolve_type(&m.ty.clean()),
-            ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
-            ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
-            ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
-            ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
-            ty_path(_, _, id) => Unresolved(id),
-            _ => fail!("Unimplemented type (this is a bug)"),
-        };
-        resolve_type(&t)
-    }
-}
-
-impl Clean<Enum> for doctree::Enum {
-    pub fn clean(&self) -> Enum {
-        Enum {
-            variants: self.variants.iter().transform(|x| x.clean()).collect(),
-            generics: self.generics.clean(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            name: its(&self.name).to_owned(),
-            where: self.where.clean(),
-            node: self.id
-        }
-    }
-}
-
-impl Clean<Variant> for doctree::Variant {
-    pub fn clean(&self) -> Variant {
-        Variant {
-            name: its(&self.name).to_owned(),
-            attrs: collapse_docs(self.attrs.iter().transform(|x| x.clean()).collect()),
-            kind: self.kind.clean(),
-            visibility: self.visibility
-        }
-    }
-}
-
-impl Clean<VariantKind> for ast::variant_kind {
-    pub fn clean(&self) -> VariantKind {
-        match self {
-            &ast::tuple_variant_kind(ref args) => {
-                if args.len() == 0 {
-                    CLikeVariant
-                } else {
-                    TupleVariant(args.iter().transform(|x| x.ty.clean()).collect())
-                }
-            },
-            &ast::struct_variant_kind(ref sd) => StructVariant(sd.clean()),
-        }
-    }
-}
-
-impl Clean<Function> for doctree::Function {
-    pub fn clean(&self) -> Function {
-        Function {
-            decl: self.decl.clean(),
-            name: its(&self.name).to_owned(),
-            id: self.id,
-            attrs: collapse_docs(self.attrs.clean()),
-            where: self.where.clean(),
-            visibility: self.visibility,
-            generics: self.generics.clean(),
-        }
-    }
-}
-
-impl Clean<VariantStruct> for syntax::ast::struct_def {
-    pub fn clean(&self) -> VariantStruct {
-        VariantStruct {
-            struct_type: doctree::struct_type_from_def(self),
-            fields: self.fields.iter().transform(
-                                       |x| doctree::StructField::new(&x.node).clean()).collect()
-        }
-    }
-}
-
-impl Clean<~str> for syntax::codemap::span {
-    pub fn clean(&self) -> ~str {
-        let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
-        cm.span_to_str(*self)
-    }
-}
-
-impl Clean<FnDecl> for ast::fn_decl {
-    pub fn clean(&self) -> FnDecl {
-        FnDecl {
-            inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
-            output: @(self.output.clean()),
-            cf: self.cf.clean(),
-            attrs: ~[]
-        }
-    }
-}
-
-impl Clean<Argument> for ast::arg {
-    pub fn clean(&self) -> Argument {
-        Argument {
-            mutable: self.is_mutbl,
-            ty: @(self.ty.clean()),
-            id: self.id
-        }
-    }
-}
-
-impl Clean<RetStyle> for ast::ret_style {
-    pub fn clean(&self) -> RetStyle {
-        match *self {
-            ast::return_val => Return,
-            ast::noreturn => NoReturn
-        }
-    }
-}
-
-impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
-    pub fn clean(&self) -> ~[U] {
-        self.iter().transform(|x| x.clean()).collect()
-    }
-}
-=======
->>>>>>> 612a426b54b552e60cb810cbb707c8f648707d02
