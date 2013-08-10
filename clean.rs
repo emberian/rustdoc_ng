@@ -832,15 +832,15 @@ impl Clean<Item> for ast::view_item {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub enum ViewItemInner {
-    ExternMod(~str, ~[Attribute], ast::NodeId),
+    ExternMod(~str, Option<~str>, ~[Attribute], ast::NodeId),
     Import(~[ViewPath])
 }
 
 impl Clean<ViewItemInner> for ast::view_item_ {
     pub fn clean(&self) -> ViewItemInner {
         match self {
-            &ast::view_item_extern_mod(ref i, ref mi, ref id) =>
-                ExternMod(i.clean(), mi.clean(), *id),
+            &ast::view_item_extern_mod(ref i, ref p, ref mi, ref id) =>
+                ExternMod(i.clean(), p.map(|x| x.to_owned()),  mi.clean(), *id),
             &ast::view_item_use(ref vp) => Import(vp.clean())
         }
     }
