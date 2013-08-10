@@ -48,7 +48,6 @@ impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Crate {
     name: ~str,
-    attrs: ~[Attribute],
     module: Option<Item>,
 }
 
@@ -63,7 +62,6 @@ impl Clean<Crate> for visit_ast::RustdocVisitor {
                 None => fail!("rustdoc_ng requires a #[link(name=\"foo\")] crate attribute"),
             },
             module: Some(self.module.clean()),
-            attrs: self.attrs.clean(),
         }
     }
 }

@@ -1,3 +1,4 @@
+use std;
 use clean;
 use clean::Item;
 use plugins;
@@ -9,6 +10,7 @@ pub fn noop(crate: clean::Crate) -> plugins::PluginResult {
     (crate, None)
 }
 
+/// Strip items marked `#[doc(hidden)]`
 pub fn strip_hidden(crate: clean::Crate) -> plugins::PluginResult {
     struct Stripper;
     impl fold::DocFolder for Stripper {
@@ -19,7 +21,7 @@ pub fn strip_hidden(crate: clean::Crate) -> plugins::PluginResult {
                         for innerattr in l.iter() {
                             match innerattr {
                                 &clean::Word(ref s) if "hidden" == *s => {
-                                    info!("found one in strip_hidden; returning false");
+                                    info!("found one in strip_hidden; removing");
                                     return None;
                                 },
                                 _ => (),
@@ -67,8 +69,10 @@ pub fn collapse_docs(crate: clean::Crate) -> plugins::PluginResult {
             let mut i = i;
             for attr in i.attrs.iter() {
                 match *attr {
-                    clean::NameValue(~"doc", ref s) =>
-                        docstr.push_str(fmt!("%s\n", s.clone())),
+                    clean::NameValue(~"doc", ref s) => {
+                        docstr.push_str(s.clone());
+                        docstr.push_char('\n');
+                    },
                     _ => ()
                 }
             }
@@ -76,7 +80,9 @@ pub fn collapse_docs(crate: clean::Crate) -> plugins::PluginResult {
                 &clean::NameValue(~"doc", _) => false,
                 _ => true
             }).transform(|x| x.clone()).collect();
-            a.push(clean::NameValue(~"doc", docstr.trim().to_owned()));
+            if "" != docstr {
+                a.push(clean::NameValue(~"doc", docstr.trim().to_owned()));
+            }
             i.attrs = a;
             self.fold_item_recur(i)
         }
@@ -93,26 +99,67 @@ enum CleanCommentStates {
     Stripped,
 }
 
-fn clean_comment_body(s: ~str) -> ~str {
-    let mut res = ~"";
-    let mut state = Strip;
+/// Returns the index of the last character all strings have common in their
+/// prefix.
+fn longest_common_prefix(s: ~[~str]) -> uint {
+    // find the longest common prefix
 
-    for char in s.iter() {
-        match (state, char) {
-            (Strip, '*') => state = Stripped,
-            (Strip, '/') => state = Stripped,
-            (Stripped, '/') => state = Strip,
-            (Strip, ' ') => (),
-            (Strip, '\t') => (),
-            (Stripped, ' ') => { res.push_char(char); state = Collect; }
-            (Stripped, '\t') => { res.push_char(char); state = Collect; }
-            (Strip, _) => { res.push_char(char); state = Stripped; }
-            (_, '\n') => { res.push_char(char); state = Strip; }
-            (_, char) => res.push_char(char)
-        }
+    debug!("lcp: looking into %?", s);
+    // index of the last character all the strings share
+    let mut index = 0u;
+
+    if s.len() <= 1 {
+        return 0;
     }
 
-    res = res.trim().to_owned();
-    res.push_char('\n');
-    res
+    // whether one of the strings has been exhausted of characters yet
+    let mut exhausted = false;
+
+    // character iterators for all the lines
+    let mut lines = s.iter().filter(|x| x.len() != 0).transform(|x| x.iter()).to_owned_vec();
+
+    'outer: loop {
+        // because you can't label a while loop
+        if exhausted == true {
+            break;
+        }
+        debug!("lcp: index %u", index);
+        let mut lines = lines.mut_iter();
+        let ch = match lines.next().unwrap().next() {
+            Some(c) => c,
+            None => { exhausted = true; loop },
+        };
+        debug!("looking for char %c", ch);
+        for line in lines {
+            match line.next() {
+                Some(c) => if c == ch { loop } else { exhausted = true; loop 'outer },
+                None => { exhausted = true; loop 'outer }
+            }
+        }
+        index += 1;
+    }
+
+    debug!("lcp: last index %u", index);
+    index
+}
+
+fn clean_comment_body(s: ~str) -> ~str {
+    // FIXME #31: lots of copies in here.
+    let lines = s.line_iter().to_owned_vec();
+    let mut ol = std::vec::with_capacity(lines.len());
+    for line in lines.clone().consume_iter() {
+        // replace meaningless things with a single newline
+        match line {
+            x if ["/**", "/*!", "///", "//!", "*/"].contains(&x.trim()) => ol.push(~""),
+            x if x.trim() == "" => ol.push(~""),
+            x => ol.push(x.to_owned())
+        }
+    }
+    let li = longest_common_prefix(ol.clone());
+
+    let x = ol.iter()
+         .filter(|x| { debug!("cleaning line: %s", **x); true })
+         .transform(|x| if x.len() == 0 { ~"" } else { x.slice_chars(li, x.char_len()).to_owned() })
+         .to_owned_vec().connect("\n");
+    x.trim().to_owned()
 }

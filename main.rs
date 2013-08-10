@@ -55,7 +55,7 @@ fn main() {
     let mut passes = if opt_present(&matches, "n") {
         ~[]
     } else {
-        ~[~"strip-hidden", ~"clean-comments", ~"collapse-docs"]
+        ~[~"strip-hidden", ~"collapse-docs", ~"clean-comments", ]
     };
 
     opt_strs(&matches, "a").map(|x| passes.push(x.clone()));

@@ -79,11 +79,13 @@ impl RustdocVisitor {
         }
 
         // Only run on the toplevel mod(s)
-        fn visit_mod(m: &ast::_mod, span: span, id: ast::NodeId, rcx: @mut RustdocVisitor) {
-            rcx.module = visit_mod_contents(m, span, id);
+        fn visit_mod(m: &ast::_mod, attrs: ~[ast::Attribute], span: span, id:
+                     ast::NodeId, rcx: @mut RustdocVisitor) {
+            rcx.module = visit_mod_contents(m, attrs, span, id);
         }
 
-        fn visit_mod_contents(m: &ast::_mod, span: span, id: ast::NodeId) -> Module {
+        fn visit_mod_contents(m: &ast::_mod, attrs: ~[ast::Attribute], span:
+                              span, id: ast::NodeId) -> Module {
             let am = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.items;
             let name = match am.find(&id) {
                 Some(m) => match m {
@@ -95,6 +97,7 @@ impl RustdocVisitor {
             let mut om = Module::new(name);
             om.view_items = m.view_items.clone();
             om.where = span;
+            om.attrs = attrs;
             for i in m.items.iter() {
                 visit_item(*i, &mut om);
             }
@@ -105,7 +108,7 @@ impl RustdocVisitor {
             debug!("Visiting item %?", item);
             match item.node {
                 ast::item_mod(ref m) => {
-                    om.mods.push(visit_mod_contents(m, item.span, item.id));
+                    om.mods.push(visit_mod_contents(m, item.attrs.clone(), item.span, item.id));
                 },
                 ast::item_enum(ref ed, ref gen) => om.enums.push(visit_enum_def(item, ed, gen)),
                 ast::item_struct(sd, ref gen) => om.structs.push(visit_struct_def(item, sd, gen)),
@@ -160,6 +163,6 @@ impl RustdocVisitor {
             }
         }
 
-        visit_mod(&crate.module, crate.span, ast::CRATE_NODE_ID, self);
+        visit_mod(&crate.module, crate.attrs.clone(), crate.span, ast::CRATE_NODE_ID, self);
     }
 }
