@@ -485,6 +485,7 @@ pub enum Type {
     BareFunction(~BareFunctionDecl),
     Tuple(~[Type]),
     Vector(~Type),
+    FixedVector(~Type, ~str),
     String,
     Bool,
     /// aka ty_nil
@@ -512,7 +513,9 @@ impl Clean<Type> for ast::Ty {
                              type_: ~resolve_type(&m.ty.clean())},
             ty_box(ref m) => Managed(m.mutbl.clean(), ~resolve_type(&m.ty.clean())),
             ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
-            ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
+            ty_vec(ref m) => Vector(~resolve_type(&m.ty.clean())),
+            ty_fixed_length_vec(ref m, ref e) => FixedVector(~resolve_type(&m.ty.clean()),
+                                                             e.span.to_src()),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
             ty_path(ref p, ref tpbs, id) => Unresolved(p.clean(), tpbs.clean(), id),
             ty_closure(ref c) => Closure(~c.clean()),
