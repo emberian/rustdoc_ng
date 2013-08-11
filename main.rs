@@ -23,7 +23,7 @@ pub mod fold;
 pub mod plugins;
 mod passes;
 
-pub static SCHEMA_VERSION: &'static str = "0.7.0";
+pub static SCHEMA_VERSION: &'static str = "0.8.0";
 
 pub static ctxtkey: std::local_data::Key<@core::DocContext> = &std::local_data::Key;
 
@@ -55,7 +55,7 @@ fn main() {
     let mut passes = if opt_present(&matches, "n") {
         ~[]
     } else {
-        ~[~"strip-hidden", ~"collapse-docs", ~"clean-comments", ]
+        ~[~"collapse-docs", ~"clean-comments", ]
     };
 
     opt_strs(&matches, "a").map(|x| passes.push(x.clone()));

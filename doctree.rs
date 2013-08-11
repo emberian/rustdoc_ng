@@ -14,9 +14,11 @@ pub struct Module {
     enums: ~[Enum],
     fns: ~[Function],
     mods: ~[Module],
+    id: NodeId,
     typedefs: ~[Typedef],
     statics: ~[Static],
     traits: ~[Trait],
+    vis: ast::visibility,
     impls: ~[Impl],
     view_items: ~[ast::view_item],
 }
@@ -25,6 +27,8 @@ impl Module {
     pub fn new(name: Option<ident>) -> Module {
         Module {
             name       : name,
+            id: 0,
+            vis: ast::private,
             where: syntax::codemap::dummy_sp(),
             attrs      : ~[],
             structs    : ~[],
@@ -58,6 +62,7 @@ pub enum TypeBound {
 }
 
 pub struct Struct {
+    vis: ast::visibility,
     id: NodeId,
     struct_type: StructType,
     name: ident,
@@ -68,6 +73,7 @@ pub struct Struct {
 }
 
 pub struct Enum {
+    vis: ast::visibility,
     variants: ~[Variant],
     generics: ast::Generics,
     attrs: ~[ast::Attribute],
@@ -80,7 +86,8 @@ pub struct Variant {
     name: ident,
     attrs: ~[ast::Attribute],
     kind: ast::variant_kind,
-    visibility: ast::visibility,
+    id: ast::NodeId,
+    vis: ast::visibility,
     where: span,
 }
 
@@ -89,7 +96,7 @@ pub struct Function {
     attrs: ~[ast::Attribute],
     id: NodeId,
     name: ident,
-    visibility: ast::visibility,
+    vis: ast::visibility,
     where: span,
     generics: ast::Generics,
 }
@@ -101,6 +108,7 @@ pub struct Typedef {
     id: ast::NodeId,
     attrs: ~[ast::Attribute],
     where: span,
+    vis: ast::visibility,
 }
 
 pub struct Static {
@@ -109,6 +117,8 @@ pub struct Static {
     expr: @ast::expr,
     name: ast::ident,
     attrs: ~[ast::Attribute],
+    vis: ast::visibility,
+    id: ast::NodeId,
     where: span,
 }
 
@@ -120,6 +130,7 @@ pub struct Trait {
     attrs: ~[ast::Attribute],
     id: ast::NodeId,
     where: span,
+    vis: ast::visibility,
 }
 
 pub struct Impl {
@@ -129,6 +140,8 @@ pub struct Impl {
     methods: ~[@ast::method],
     attrs: ~[ast::Attribute],
     where: span,
+    vis: ast::visibility,
+    id: ast::NodeId,
 }
 
 pub fn struct_type_from_def(sd: &ast::struct_def) -> StructType {

@@ -146,6 +146,12 @@ fn longest_common_prefix(s: ~[~str]) -> uint {
 fn clean_comment_body(s: ~str) -> ~str {
     // FIXME #31: lots of copies in here.
     let lines = s.line_iter().to_owned_vec();
+    match lines.len() {
+        0 => return ~"",
+        1 => return lines[0].slice_from(j).trim().to_owned(),
+        _ => (),
+    }
+            
     let mut ol = std::vec::with_capacity(lines.len());
     for line in lines.clone().consume_iter() {
         // replace meaningless things with a single newline
@@ -156,7 +162,7 @@ fn clean_comment_body(s: ~str) -> ~str {
         }
     }
     let li = longest_common_prefix(ol.clone());
-
+    
     let x = ol.iter()
          .filter(|x| { debug!("cleaning line: %s", **x); true })
          .transform(|x| if x.len() == 0 { ~"" } else { x.slice_chars(li, x.char_len()).to_owned() })

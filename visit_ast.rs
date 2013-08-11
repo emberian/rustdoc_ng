@@ -35,6 +35,7 @@ impl RustdocVisitor {
                 id: item.id,
                 struct_type: struct_type,
                 name: item.ident,
+                vis: item.vis,
                 attrs: item.attrs.clone(),
                 generics: generics.clone(),
                 fields: sd.fields.iter().transform(|x| (*x).clone()).to_owned_vec(),
@@ -49,7 +50,8 @@ impl RustdocVisitor {
                 vars.push(Variant {
                     name: x.node.name,
                     attrs: x.node.attrs.clone(),
-                    visibility: x.node.vis,
+                    vis: x.node.vis,
+                    id: x.node.id,
                     kind: x.node.kind.clone(),
                     where: x.span,
                 });
@@ -57,6 +59,7 @@ impl RustdocVisitor {
             Enum {
                 name: it.ident,
                 variants: vars,
+                vis: it.vis,
                 generics: params.clone(),
                 attrs: it.attrs.clone(),
                 id: it.id,
@@ -69,23 +72,17 @@ impl RustdocVisitor {
             debug!("Visiting fn");
             Function {
                 id: item.id,
+                vis: item.vis,
                 attrs: item.attrs.clone(),
                 decl: fd.clone(),
                 name: item.ident,
-                visibility: item.vis,
                 where: item.span,
                 generics: gen.clone(),
             }
         }
 
-        // Only run on the toplevel mod(s)
-        fn visit_mod(m: &ast::_mod, attrs: ~[ast::Attribute], span: span, id:
-                     ast::NodeId, rcx: @mut RustdocVisitor) {
-            rcx.module = visit_mod_contents(m, attrs, span, id);
-        }
-
-        fn visit_mod_contents(m: &ast::_mod, attrs: ~[ast::Attribute], span:
-                              span, id: ast::NodeId) -> Module {
+        fn visit_mod_contents(span: span, attrs: ~[ast::Attribute], vis:
+                              ast::visibility, id: ast::NodeId, m: &ast::_mod) -> Module {
             let am = local_data::get(super::ctxtkey, |x| *x.unwrap()).tycx.items;
             let name = match am.find(&id) {
                 Some(m) => match m {
@@ -98,6 +95,8 @@ impl RustdocVisitor {
             om.view_items = m.view_items.clone();
             om.where = span;
             om.attrs = attrs;
+            om.vis = vis;
+            om.id = id;
             for i in m.items.iter() {
                 visit_item(*i, &mut om);
             }
@@ -108,7 +107,8 @@ impl RustdocVisitor {
             debug!("Visiting item %?", item);
             match item.node {
                 ast::item_mod(ref m) => {
-                    om.mods.push(visit_mod_contents(m, item.attrs.clone(), item.span, item.id));
+                    om.mods.push(visit_mod_contents(item.span, item.attrs.clone(),
+                                                    item.vis, item.id, m));
                 },
                 ast::item_enum(ref ed, ref gen) => om.enums.push(visit_enum_def(item, ed, gen)),
                 ast::item_struct(sd, ref gen) => om.structs.push(visit_struct_def(item, sd, gen)),
@@ -122,6 +122,7 @@ impl RustdocVisitor {
                         id: item.id,
                         attrs: item.attrs.clone(),
                         where: item.span,
+                        vis: item.vis,
                     };
                     om.typedefs.push(t);
                 },
@@ -130,9 +131,11 @@ impl RustdocVisitor {
                         type_: ty.clone(),
                         mutability: mut_.clone(),
                         expr: exp.clone(),
+                        id: item.id,
                         name: item.ident,
                         attrs: item.attrs.clone(),
                         where: item.span,
+                        vis: item.vis,
                     };
                     om.statics.push(s);
                 },
@@ -144,7 +147,8 @@ impl RustdocVisitor {
                         parents: tr.clone(),
                         id: item.id,
                         attrs: item.attrs.clone(),
-                        where: item.span
+                        where: item.span,
+                        vis: item.vis,
                     };
                     om.traits.push(t);
                 },
@@ -155,7 +159,9 @@ impl RustdocVisitor {
                         for_: ty.clone(),
                         methods: meths.clone(),
                         attrs: item.attrs.clone(),
+                        id: item.id,
                         where: item.span,
+                        vis: item.vis,
                     };
                     om.impls.push(i);
                 },
@@ -163,6 +169,7 @@ impl RustdocVisitor {
             }
         }
 
-        visit_mod(&crate.module, crate.attrs.clone(), crate.span, ast::CRATE_NODE_ID, self);
+        self.module = visit_mod_contents(crate.span, crate.attrs.clone(),
+                                         ast::public, ast::CRATE_NODE_ID, &crate.module);
     }
 }

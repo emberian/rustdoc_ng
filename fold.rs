@@ -11,7 +11,7 @@ pub trait DocFolder {
     /// don't override!
     pub fn fold_item_recur(&mut self, item: Item) -> Option<Item> {
         use std::util::swap;
-        let Item { attrs, name, source, inner } = item;
+        let Item { attrs, name, source, visibility, id, inner } = item;
         let inner = inner;
         let c = |x| self.fold_item(x);
         let inner = match inner {
@@ -73,7 +73,8 @@ pub trait DocFolder {
             x => x
         };
 
-        Some(Item { attrs: attrs, name: name, source: source, inner: inner })
+        Some(Item { attrs: attrs, name: name, source: source, inner: inner,
+                    visibility: visibility, id: id })
     }
 
     pub fn fold_mod(&mut self, m: Module) -> Module {
@@ -87,11 +88,12 @@ pub trait DocFolder {
         c.module = self.fold_item(mod_);
         let Crate { name, module } = c;
         match module {
-            Some(Item { inner: ModuleItem(m), name: name_, attrs: attrs_, source }) => {
+            Some(Item { inner: ModuleItem(m), name: name_, attrs: attrs_,
+            source, visibility: vis, id }) => {
                 return Crate { module: Some(Item { inner:
                                             ModuleItem(self.fold_mod(m)),
                                             name: name_, attrs: attrs_,
-                                            source: source }), name: name};
+                                            source: source, id: id, visibility: vis }), name: name};
             },
             Some(_) => fail!("non-module item set as module of crate"),
             None => return Crate { module: None, name: name},

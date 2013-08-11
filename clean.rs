@@ -77,6 +77,8 @@ pub struct Item {
     name: Option<~str>,
     attrs: ~[Attribute],
     inner: ItemEnum,
+    visibility: Option<Visibility>,
+    id: ast::NodeId,
 }
 
 #[deriving(Clone, Encodable, Decodable)]
@@ -112,8 +114,10 @@ impl Clean<Item> for doctree::Module {
             name: Some(name),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            visibility: self.vis.clean(),
+            id: self.id,
             inner: ModuleItem(Module {
-                items: std::vec::concat(&[self.structs.clean(),
+               items: std::vec::concat(&[self.structs.clean(),
                               self.enums.clean(), self.fns.clean(),
                               self.mods.clean(), self.typedefs.clean(),
                               self.statics.clean(), self.traits.clean(),
@@ -158,7 +162,7 @@ impl Clean<TyParam> for ast::TyParam {
         TyParam {
             name: self.ident.clean(),
             id: self.id,
-            bounds: self.bounds.iter().transform(|x| x.clean()).collect()
+            bounds: self.bounds.clean(),
         }
     }
 }
@@ -218,8 +222,6 @@ pub struct Method {
     self_: SelfTy,
     purity: ast::purity,
     decl: FnDecl,
-    id: ast::NodeId,
-    vis: Visibility,
 }
 
 impl Clean<Item> for ast::method {
@@ -228,13 +230,13 @@ impl Clean<Item> for ast::method {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
             source: self.span.clean(),
+            id: self.self_id.clone(),
+            visibility: None,
             inner: MethodItem(Method {
                 generics: self.generics.clean(),
                 self_: self.explicit_self.clean(),
                 purity: self.purity.clone(),
                 decl: self.decl.clean(),
-                id: self.self_id.clone(),
-                vis: self.vis,
             }),
         }
     }
@@ -245,7 +247,6 @@ pub struct TyMethod {
     purity: ast::purity,
     decl: FnDecl,
     generics: Generics,
-    id: ast::NodeId,
     self_: SelfTy,
 }
 
@@ -255,12 +256,13 @@ impl Clean<Item> for ast::TypeMethod {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
             source: self.span.clean(),
+            id: self.id,
+            visibility: None,
             inner: TyMethodItem(TyMethod {
                 purity: self.purity.clone(),
                 decl: self.decl.clean(),
                 self_: self.explicit_self.clean(),
                 generics: self.generics.clean(),
-                id: self.id,
             }),
         }
     }
@@ -290,10 +292,7 @@ impl Clean<SelfTy> for ast::explicit_self {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Function {
     decl: FnDecl,
-    visibility: Visibility,
     generics: Generics,
-    //body: Block,
-    id: ast::NodeId,
 }
 
 impl Clean<Item> for doctree::Function {
@@ -302,10 +301,10 @@ impl Clean<Item> for doctree::Function {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            visibility: self.vis.clean(),
+            id: self.id,
             inner: FunctionItem(Function {
-                id: self.id,
                 decl: self.decl.clean(),
-                visibility: self.visibility,
                 generics: self.generics.clean(),
             }),
         }
@@ -361,7 +360,7 @@ impl Clean<FnDecl> for ast::fn_decl {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Argument {
-    ty: Type,
+    type_: Type,
     name: ~str,
     id: ast::NodeId
 }
@@ -370,7 +369,7 @@ impl Clean<Argument> for ast::arg {
     pub fn clean(&self) -> Argument {
         Argument {
             name: name_from_pat(self.pat),
-            ty: (self.ty.clean()),
+            type_: (self.ty.clean()),
             id: self.id
         }
     }
@@ -396,7 +395,6 @@ pub struct Trait {
     methods: ~[TraitMethod],
     generics: Generics,
     parents: ~[TraitRef],
-    id: ast::NodeId,
 }
 
 impl Clean<Item> for doctree::Trait {
@@ -405,11 +403,12 @@ impl Clean<Item> for doctree::Trait {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id,
+            visibility: self.vis.clean(),
             inner: TraitItem(Trait {
                 methods: self.methods.clean(),
                 generics: self.generics.clean(),
                 parents: self.parents.clean(),
-                id: self.id
             }),
         }
     }
@@ -467,11 +466,13 @@ impl Clean<TraitMethod> for ast::trait_method {
 pub enum Type {
     /// Most types start out as "Unresolved". It serves as an intermediate stage between cleaning
     /// and type resolution.
-    Unresolved(ast::NodeId),
+    Unresolved(Path, Option<~[TyParamBound]>, ast::NodeId),
     /// structs/enums/traits (anything that'd be an ast::ty_path)
-    Resolved(ast::NodeId),
+    ResolvedPath { path: Path, typarams: Option<~[TyParamBound]>, id: ast::NodeId },
     /// Reference to an item in an external crate (fully qualified path)
     External(~str, ~str),
+    // I have no idea how to usefully use this.
+    TyParamBinder(ast::NodeId),
     /// For parameterized types, so the consumer of the JSON don't go looking
     /// for types which don't exist anywhere.
     Generic(ast::NodeId),
@@ -491,9 +492,9 @@ pub enum Type {
     /// aka ty_bot
     Bottom,
     Unique(~Type),
-    Managed(~Type),
-    RawPointer(~Type),
-    BorrowedRef(~Type),
+    Managed(Mutability, ~Type),
+    RawPointer(Mutability, ~Type),
+    BorrowedRef { lifetime: Option<Lifetime>, mutability: Mutability, type_: ~Type},
     // region, raw, other boxes, mutable
 }
 
@@ -505,13 +506,15 @@ impl Clean<Type> for ast::Ty {
         debug!("span corresponds to `%s`", codemap.span_to_str(self.span));
         let t = match self.node {
             ty_nil => Unit,
-            ty_ptr(ref m) =>  RawPointer(~resolve_type(&m.ty.clean())),
-            ty_rptr(_, ref m) => BorrowedRef(~resolve_type(&m.ty.clean())),
-            ty_box(ref m) => Managed(~resolve_type(&m.ty.clean())),
+            ty_ptr(ref m) =>  RawPointer(m.mutbl.clean(), ~resolve_type(&m.ty.clean())),
+            ty_rptr(ref l, ref m) => 
+                BorrowedRef {lifetime: l.clean(), mutability: m.mutbl.clean(),
+                             type_: ~resolve_type(&m.ty.clean())},
+            ty_box(ref m) => Managed(m.mutbl.clean(), ~resolve_type(&m.ty.clean())),
             ty_uniq(ref m) => Unique(~resolve_type(&m.ty.clean())),
             ty_vec(ref m) | ty_fixed_length_vec(ref m, _) => Vector(~resolve_type(&m.ty.clean())),
             ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
-            ty_path(_, _, id) => Unresolved(id),
+            ty_path(ref p, ref tpbs, id) => Unresolved(p.clean(), tpbs.clean(), id),
             ty_closure(ref c) => Closure(~c.clean()),
             ty_bare_fn(ref barefn) => BareFunction(~barefn.clean()),
             ty_bot => Bottom,
@@ -524,7 +527,6 @@ impl Clean<Type> for ast::Ty {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct StructField {
     type_: Type,
-    visibility: Option<Visibility>,
 }
 
 impl Clean<Item> for ast::struct_field {
@@ -537,9 +539,10 @@ impl Clean<Item> for ast::struct_field {
             name: name.clean(),
             attrs: self.node.attrs.clean(),
             source: self.span.clean(),
+            visibility: vis,
+            id: self.node.id,
             inner: StructFieldItem(StructField {
                 type_: self.node.ty.clean(),
-                visibility: vis,
             }),
         }
     }
@@ -547,9 +550,14 @@ impl Clean<Item> for ast::struct_field {
 
 pub type Visibility = ast::visibility;
 
+impl Clean<Option<Visibility>> for ast::visibility {
+    pub fn clean(&self) -> Option<Visibility> {
+        Some(*self)
+    }
+}
+
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Struct {
-    id: ast::NodeId,
     struct_type: doctree::StructType,
     generics: Generics,
     fields: ~[Item],
@@ -561,8 +569,9 @@ impl Clean<Item> for doctree::Struct {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id,
+            visibility: self.vis.clean(),
             inner: StructItem(Struct {
-                id: self.id,
                 struct_type: self.struct_type,
                 generics: self.generics.clean(),
                 fields: self.fields.clean(),
@@ -593,7 +602,6 @@ impl Clean<VariantStruct> for syntax::ast::struct_def {
 pub struct Enum {
     variants: ~[Item],
     generics: Generics,
-    id: ast::NodeId,
 }
 
 impl Clean<Item> for doctree::Enum {
@@ -602,10 +610,11 @@ impl Clean<Item> for doctree::Enum {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id,
+            visibility: self.vis.clean(),
             inner: EnumItem(Enum {
                 variants: self.variants.iter().transform(|x| x.clean()).collect(),
                 generics: self.generics.clean(),
-                id: self.id,
             }),
         }
     }
@@ -614,7 +623,6 @@ impl Clean<Item> for doctree::Enum {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Variant {
     kind: VariantKind,
-    visibility: Visibility,
 }
 
 impl Clean<Item> for doctree::Variant {
@@ -623,9 +631,10 @@ impl Clean<Item> for doctree::Variant {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            visibility: self.vis.clean(),
+            id: self.id,
             inner: VariantItem(Variant {
                 kind: self.kind.clean(),
-                visibility: self.visibility
             }),
         }
     }
@@ -703,7 +712,6 @@ impl Clean<~str> for ast::ident {
 pub struct Typedef {
     type_: Type,
     generics: Generics,
-    id: ast::NodeId,
 }
 
 impl Clean<Item> for doctree::Typedef {
@@ -712,10 +720,11 @@ impl Clean<Item> for doctree::Typedef {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id.clone(),
+            visibility: self.vis.clean(),
             inner: TypedefItem(Typedef {
                 type_: self.ty.clean(),
                 generics: self.gen.clean(),
-                id: self.id.clone(),
             }),
         }
     }
@@ -760,6 +769,8 @@ impl Clean<Item> for doctree::Static {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id,
+            visibility: self.vis.clean(),
             inner: StaticItem(Static {
                 type_: self.type_.clean(),
                 mutability: self.mutability.clean(),
@@ -800,6 +811,8 @@ impl Clean<Item> for doctree::Impl {
             name: None,
             attrs: self.attrs.clean(),
             source: self.where.clean(),
+            id: self.id,
+            visibility: self.vis.clean(),
             inner: ImplItem(Impl {
                 generics: self.generics.clean(),
                 trait_: self.trait_.clean(),
@@ -812,7 +825,6 @@ impl Clean<Item> for doctree::Impl {
 
 #[deriving(Clone, Encodable, Decodable)]
 pub struct ViewItem {
-    vis: Visibility,
     inner: ViewItemInner
 }
 
@@ -822,8 +834,9 @@ impl Clean<Item> for ast::view_item {
             name: None,
             attrs: self.attrs.clean(),
             source: self.span.clean(),
+            id: 0,
+            visibility: self.vis.clean(),
             inner: ViewItemItem(ViewItem {
-                vis: self.vis,
                 inner: self.node.clean()
             }),
         }
@@ -955,8 +968,8 @@ fn remove_comment_tags(s: &str) -> ~str {
 fn resolve_type(t: &Type) -> Type {
     use syntax::ast::*;
 
-    let id = match t {
-        &Unresolved(id) => id,
+    let (path, tpbs, id) = match t {
+        &Unresolved(ref path, ref tbps, id) => (path, tbps, id),
         _ => return (*t).clone(),
     };
 
@@ -987,7 +1000,10 @@ fn resolve_type(t: &Type) -> Type {
         },
         def_ty_param(i, _) => return Generic(i.node),
         def_struct(i) => i,
-        def_typaram_binder(i) => return Resolved(i),
+        def_typaram_binder(i) => { 
+            debug!("found a typaram_binder, what is it? %d", i);
+            return TyParamBinder(i);
+        },
         x => fail!("resolved type maps to a weird def %?", x),
     };
 
@@ -1038,7 +1054,7 @@ fn resolve_type(t: &Type) -> Type {
         let cname = cstore::get_crate_data(sess.cstore, def_id.crate).name.to_owned();
         External(cname + "::" + path, ty)
     } else {
-        Resolved(def_id.node)
+        ResolvedPath {path: path.clone(), typarams: tpbs.clone(), id: def_id.node}
     }
 }
 
