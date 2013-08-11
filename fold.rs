@@ -18,7 +18,7 @@ pub trait DocFolder {
             StructItem(i) => {
                 let mut i = i;
                 let mut foo = ~[]; swap(&mut foo, &mut i.fields);
-                i.fields.extend(&mut foo.consume_iter().filter_map(|x| self.fold_item(x)));
+                i.fields.extend(&mut foo.move_iter().filter_map(|x| self.fold_item(x)));
                 StructItem(i)
             },
             ModuleItem(i) => {
@@ -27,7 +27,7 @@ pub trait DocFolder {
             EnumItem(i) => {
                 let mut i = i;
                 let mut foo = ~[]; swap(&mut foo, &mut i.variants);
-                i.variants.extend(&mut foo.consume_iter().filter_map(|x| self.fold_item(x)));
+                i.variants.extend(&mut foo.move_iter().filter_map(|x| self.fold_item(x)));
                 EnumItem(i)
             },
             TraitItem(i) => {
@@ -49,13 +49,13 @@ pub trait DocFolder {
                 }
                 let mut i = i;
                 let mut foo = ~[]; swap(&mut foo, &mut i.methods);
-                i.methods.extend(&mut foo.consume_iter().filter_map(|x| vtrm(self, x)));
+                i.methods.extend(&mut foo.move_iter().filter_map(|x| vtrm(self, x)));
                 TraitItem(i)
             },
             ImplItem(i) => {
                 let mut i = i;
                 let mut foo = ~[]; swap(&mut foo, &mut i.methods);
-                i.methods.extend(&mut foo.consume_iter().filter_map(|x| self.fold_item(x)));
+                i.methods.extend(&mut foo.move_iter().filter_map(|x| self.fold_item(x)));
                 ImplItem(i)
             },
             VariantItem(i) => {
@@ -64,7 +64,7 @@ pub trait DocFolder {
                     StructVariant(j) => {
                         let mut j = j;
                         let mut foo = ~[]; swap(&mut foo, &mut j.fields);
-                        j.fields.extend(&mut foo.consume_iter().filter_map(c));
+                        j.fields.extend(&mut foo.move_iter().filter_map(c));
                         VariantItem(Variant {kind: StructVariant(j), ..i2})
                     },
                     _ => VariantItem(i2)
@@ -78,7 +78,7 @@ pub trait DocFolder {
     }
 
     pub fn fold_mod(&mut self, m: Module) -> Module {
-        Module { items: m.items.consume_iter().filter_map(|i| self.fold_item(i)).collect() }
+        Module { items: m.items.move_iter().filter_map(|i| self.fold_item(i)).collect() }
     }
 
     pub fn fold_crate(&mut self, mut c: Crate) -> Crate {

@@ -55,7 +55,7 @@ fn main() {
     let mut passes = if opt_present(&matches, "n") {
         ~[]
     } else {
-        ~[~"collapse-docs", ~"clean-comments", ]
+        ~[~"collapse-docs", ~"clean-comments", ~"collapse-privacy" ]
     };
 
     opt_strs(&matches, "a").map(|x| passes.push(x.clone()));
@@ -80,16 +80,17 @@ fn main() {
             "strip-hidden" => passes::strip_hidden,
             "clean-comments" => passes::clean_comments,
             "collapse-docs" => passes::collapse_docs,
-            s => { error!("unknown pass %s", s); passes::noop },
+            "collapse-privacy" => passes::collapse_privacy,
+            s => { error!("unknown pass %s, skipping", s); passes::noop },
         })
     }
 
-    for pname in opt_strs(&matches, "p").consume_iter() {
+    for pname in opt_strs(&matches, "p").move_iter() {
         pm.load_plugin(pname);
     }
 
     let (crate, res) = pm.run_plugins(crate);
-    let plugins_json = ~res.consume_iter().filter_map(|opt| opt).collect();
+    let plugins_json = ~res.move_iter().filter_map(|opt| opt).collect();
 
     // FIXME: yuck, Rust -> str -> JSON round trip! No way to .encode
     // straight to the Rust JSON representation.

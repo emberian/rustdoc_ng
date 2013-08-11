@@ -1,5 +1,6 @@
 use std;
 use clean;
+use syntax::ast;
 use clean::Item;
 use plugins;
 use fold;
@@ -61,6 +62,27 @@ pub fn clean_comments(crate: clean::Crate) -> plugins::PluginResult {
     (crate, None)
 }
 
+pub fn collapse_privacy(crate: clean::Crate) -> plugins::PluginResult {
+    struct PrivacyCollapser {
+        stack: ~[clean::Visibility]
+    }
+    impl fold::DocFolder for PrivacyCollapser {
+        pub fn fold_item(&mut self, mut i: Item) -> Option<Item> {
+            if i.visibility.is_some() {
+                if i.visibility == Some(ast::inherited) {
+                    i.visibility = Some(self.stack.last().clone());
+                } else {
+                    self.stack.push(i.visibility.clone().unwrap());
+                }
+            }
+            self.fold_item_recur(i)
+        }
+    }
+    let mut privacy = PrivacyCollapser { stack: ~[] };
+    let crate = privacy.fold_crate(crate);
+    (crate, None)
+}
+
 pub fn collapse_docs(crate: clean::Crate) -> plugins::PluginResult {
     struct Collapser;
     impl fold::DocFolder for Collapser {
@@ -79,7 +101,7 @@ pub fn collapse_docs(crate: clean::Crate) -> plugins::PluginResult {
             let mut a: ~[clean::Attribute] = i.attrs.iter().filter(|&a| match a {
                 &clean::NameValue(~"doc", _) => false,
                 _ => true
-            }).transform(|x| x.clone()).collect();
+            }).map(|x| x.clone()).collect();
             if "" != docstr {
                 a.push(clean::NameValue(~"doc", docstr.trim().to_owned()));
             }
@@ -116,7 +138,7 @@ fn longest_common_prefix(s: ~[~str]) -> uint {
     let mut exhausted = false;
 
     // character iterators for all the lines
-    let mut lines = s.iter().filter(|x| x.len() != 0).transform(|x| x.iter()).to_owned_vec();
+    let mut lines = s.iter().filter(|x| x.len() != 0).map(|x| x.iter()).to_owned_vec();
 
     'outer: loop {
         // because you can't label a while loop
@@ -148,12 +170,12 @@ fn clean_comment_body(s: ~str) -> ~str {
     let lines = s.line_iter().to_owned_vec();
     match lines.len() {
         0 => return ~"",
-        1 => return lines[0].slice_from(j).trim().to_owned(),
+        1 => return lines[0].slice_from(2).trim().to_owned(),
         _ => (),
     }
             
     let mut ol = std::vec::with_capacity(lines.len());
-    for line in lines.clone().consume_iter() {
+    for line in lines.clone().move_iter() {
         // replace meaningless things with a single newline
         match line {
             x if ["/**", "/*!", "///", "//!", "*/"].contains(&x.trim()) => ol.push(~""),
@@ -165,7 +187,7 @@ fn clean_comment_body(s: ~str) -> ~str {
     
     let x = ol.iter()
          .filter(|x| { debug!("cleaning line: %s", **x); true })
-         .transform(|x| if x.len() == 0 { ~"" } else { x.slice_chars(li, x.char_len()).to_owned() })
+         .map(|x| if x.len() == 0 { ~"" } else { x.slice_chars(li, x.char_len()).to_owned() })
          .to_owned_vec().connect("\n");
     x.trim().to_owned()
 }

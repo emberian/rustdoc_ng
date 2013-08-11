@@ -18,7 +18,7 @@ pub trait Clean<T> {
 
 impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
     pub fn clean(&self) -> ~[U] {
-        self.iter().transform(|x| x.clean()).collect()
+        self.iter().map(|x| x.clean()).collect()
     }
 }
 impl<T: Clean<U>, U> Clean<U> for @T {
@@ -170,7 +170,7 @@ impl Clean<TyParam> for ast::TyParam {
 #[deriving(Clone, Encodable, Decodable)]
 pub enum TyParamBound {
     RegionBound,
-    TraitBound(TraitRef)
+    TraitBound(Type)
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
@@ -210,8 +210,8 @@ impl Generics {
 impl Clean<Generics> for ast::Generics {
     pub fn clean(&self) -> Generics {
         Generics {
-            lifetimes: self.lifetimes.iter().transform(|x| x.clean()).collect(),
-            type_params: self.ty_params.iter().transform(|x| x.clean()).collect()
+            lifetimes: self.lifetimes.clean(),
+            type_params: self.ty_params.clean(),
         }
     }
 }
@@ -350,7 +350,7 @@ pub struct FnDecl {
 impl Clean<FnDecl> for ast::fn_decl {
     pub fn clean(&self) -> FnDecl {
         FnDecl {
-            inputs: self.inputs.iter().transform(|x| x.clean()).collect(),
+            inputs: self.inputs.iter().map(|x| x.clean()).collect(),
             output: (self.output.clean()),
             cf: self.cf.clean(),
             attrs: ~[]
@@ -394,7 +394,7 @@ impl Clean<RetStyle> for ast::ret_style {
 pub struct Trait {
     methods: ~[TraitMethod],
     generics: Generics,
-    parents: ~[TraitRef],
+    parents: ~[Type],
 }
 
 impl Clean<Item> for doctree::Trait {
@@ -414,18 +414,10 @@ impl Clean<Item> for doctree::Trait {
     }
 }
 
-#[deriving(Clone, Encodable, Decodable)]
-pub struct TraitRef {
-    path: Path,
-    id: ast::NodeId,
-}
-
-impl Clean<TraitRef> for ast::trait_ref {
-    pub fn clean(&self) -> TraitRef {
-        TraitRef {
-            path: self.path.clean(),
-            id: self.ref_id,
-        }
+impl Clean<Type> for ast::trait_ref {
+    pub fn clean(&self) -> Type {
+        let t = Unresolved(self.path.clean(), None, self.ref_id);
+        resolve_type(&t)
     }
 }
 
@@ -516,7 +508,7 @@ impl Clean<Type> for ast::Ty {
             ty_vec(ref m) => Vector(~resolve_type(&m.ty.clean())),
             ty_fixed_length_vec(ref m, ref e) => FixedVector(~resolve_type(&m.ty.clean()),
                                                              e.span.to_src()),
-            ty_tup(ref tys) => Tuple(tys.iter().transform(|x| resolve_type(&x.clean())).collect()),
+            ty_tup(ref tys) => Tuple(tys.iter().map(|x| resolve_type(&x.clean())).collect()),
             ty_path(ref p, ref tpbs, id) => Unresolved(p.clean(), tpbs.clean(), id),
             ty_closure(ref c) => Closure(~c.clean()),
             ty_bare_fn(ref barefn) => BareFunction(~barefn.clean()),
@@ -616,7 +608,7 @@ impl Clean<Item> for doctree::Enum {
             id: self.id,
             visibility: self.vis.clean(),
             inner: EnumItem(Enum {
-                variants: self.variants.iter().transform(|x| x.clean()).collect(),
+                variants: self.variants.clean(),
                 generics: self.generics.clean(),
             }),
         }
@@ -657,7 +649,7 @@ impl Clean<VariantKind> for ast::variant_kind {
                 if args.len() == 0 {
                     CLikeVariant
                 } else {
-                    TupleVariant(args.iter().transform(|x| x.ty.clean()).collect())
+                    TupleVariant(args.iter().map(|x| x.ty.clean()).collect())
                 }
             },
             &ast::struct_variant_kind(ref sd) => StructVariant(sd.clean()),
@@ -694,7 +686,7 @@ pub fn path_to_str(p: &ast::Path) -> ~str {
 
     let mut s = ~"";
     let mut first = true;
-    for i in p.idents.iter().transform(|x| interner_get(x.name)) {
+    for i in p.idents.iter().map(|x| interner_get(x.name)) {
         if !first || p.global {
             s.push_str("::");
         } else {
@@ -803,7 +795,7 @@ impl Clean<Mutability> for ast::mutability {
 #[deriving(Clone, Encodable, Decodable)]
 pub struct Impl {
     generics: Generics,
-    trait_: Option<TraitRef>,
+    trait_: Option<Type>,
     for_: Type,
     methods: ~[Item],
 }
@@ -962,7 +954,7 @@ fn remove_comment_tags(s: &str) -> ~str {
     let mut a = attrs.iter().filter(|&a| match a {
         &NameValue(~"doc", _) => false,
         _ => true
-    }).transform(|x| x.clone()).collect::<~[Attribute]>();
+    }).map(|x| x.clone()).collect::<~[Attribute]>();
     a.push(NameValue(~"doc", docstr.trim().to_owned()));
     a
 }*/
