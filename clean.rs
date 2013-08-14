@@ -13,22 +13,22 @@ use visit_ast;
 use std::local_data;
 
 pub trait Clean<T> {
-    pub fn clean(&self) -> T;
+    fn clean(&self) -> T;
 }
 
 impl<T: Clean<U>, U> Clean<~[U]> for ~[T] {
-    pub fn clean(&self) -> ~[U] {
+    fn clean(&self) -> ~[U] {
         self.iter().map(|x| x.clean()).collect()
     }
 }
 impl<T: Clean<U>, U> Clean<U> for @T {
-    pub fn clean(&self) -> U {
+    fn clean(&self) -> U {
         (**self).clean()
     }
 }
 
 impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
-    pub fn clean(&self) -> Option<U> {
+    fn clean(&self) -> Option<U> {
         match self {
             &None => None,
             &Some(ref v) => Some(v.clean())
@@ -37,7 +37,7 @@ impl<T: Clean<U>, U> Clean<Option<U>> for Option<T> {
 }
 
 impl<T: Clean<U>, U> Clean<~[U]> for syntax::opt_vec::OptVec<T> {
-    pub fn clean(&self) -> ~[U] {
+    fn clean(&self) -> ~[U] {
         match self {
             &syntax::opt_vec::Empty => ~[],
             &syntax::opt_vec::Vec(ref v) => v.clean()
@@ -52,7 +52,7 @@ pub struct Crate {
 }
 
 impl Clean<Crate> for visit_ast::RustdocVisitor {
-    pub fn clean(&self) -> Crate {
+    fn clean(&self) -> Crate {
         use syntax::attr::{find_linkage_metas, last_meta_item_value_str_by_name};
         let maybe_meta = last_meta_item_value_str_by_name(find_linkage_metas(self.attrs), "name");
 
@@ -104,7 +104,7 @@ pub struct Module {
 }
 
 impl Clean<Item> for doctree::Module {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         let name = if self.name.is_some() {
             self.name.unwrap().clean()
         } else {
@@ -135,7 +135,7 @@ pub enum Attribute {
 }
 
 impl Clean<Attribute> for ast::MetaItem {
-    pub fn clean(&self) -> Attribute {
+    fn clean(&self) -> Attribute {
         match self.node {
             ast::MetaWord(s) => Word(s.to_owned()),
             ast::MetaList(ref s, ref l) => List(s.to_owned(), l.clean()),
@@ -145,7 +145,7 @@ impl Clean<Attribute> for ast::MetaItem {
 }
 
 impl Clean<Attribute> for ast::Attribute {
-    pub fn clean(&self) -> Attribute {
+    fn clean(&self) -> Attribute {
         self.node.value.clean()
     }
 }
@@ -158,7 +158,7 @@ pub struct TyParam {
 }
 
 impl Clean<TyParam> for ast::TyParam {
-    pub fn clean(&self) -> TyParam {
+    fn clean(&self) -> TyParam {
         TyParam {
             name: self.ident.clean(),
             id: self.id,
@@ -174,7 +174,7 @@ pub enum TyParamBound {
 }
 
 impl Clean<TyParamBound> for ast::TyParamBound {
-    pub fn clean(&self) -> TyParamBound {
+    fn clean(&self) -> TyParamBound {
         match *self {
             ast::RegionTyParamBound => RegionBound,
             ast::TraitTyParamBound(ref t) => TraitBound(t.clean()),
@@ -186,7 +186,7 @@ impl Clean<TyParamBound> for ast::TyParamBound {
 pub struct Lifetime(~str);
 
 impl Clean<Lifetime> for ast::Lifetime {
-    pub fn clean(&self) -> Lifetime {
+    fn clean(&self) -> Lifetime {
         Lifetime(self.ident.clean())
     }
 }
@@ -199,7 +199,7 @@ pub struct Generics {
 }
 
 impl Generics {
-    pub fn new() -> Generics {
+    fn new() -> Generics {
         Generics {
             lifetimes: ~[],
             type_params: ~[]
@@ -208,7 +208,7 @@ impl Generics {
 }
 
 impl Clean<Generics> for ast::Generics {
-    pub fn clean(&self) -> Generics {
+    fn clean(&self) -> Generics {
         Generics {
             lifetimes: self.lifetimes.clean(),
             type_params: self.ty_params.clean(),
@@ -225,7 +225,7 @@ pub struct Method {
 }
 
 impl Clean<Item> for ast::method {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
@@ -251,7 +251,7 @@ pub struct TyMethod {
 }
 
 impl Clean<Item> for ast::TypeMethod {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.ident.clean()),
             attrs: self.attrs.clean(),
@@ -278,7 +278,7 @@ pub enum SelfTy {
 }
 
 impl Clean<SelfTy> for ast::explicit_self {
-    pub fn clean(&self) -> SelfTy {
+    fn clean(&self) -> SelfTy {
         match self.node {
             ast::sty_static => SelfStatic,
             ast::sty_value => SelfValue,
@@ -296,7 +296,7 @@ pub struct Function {
 }
 
 impl Clean<Item> for doctree::Function {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -323,7 +323,7 @@ pub struct ClosureDecl {
 }
 
 impl Clean<ClosureDecl> for ast::TyClosure {
-    pub fn clean(&self) -> ClosureDecl {
+    fn clean(&self) -> ClosureDecl {
         ClosureDecl {
             sigil: self.sigil,
             region: self.region.clean(),
@@ -348,7 +348,7 @@ pub struct FnDecl {
 }
 
 impl Clean<FnDecl> for ast::fn_decl {
-    pub fn clean(&self) -> FnDecl {
+    fn clean(&self) -> FnDecl {
         FnDecl {
             inputs: self.inputs.iter().map(|x| x.clean()).collect(),
             output: (self.output.clean()),
@@ -366,7 +366,7 @@ pub struct Argument {
 }
 
 impl Clean<Argument> for ast::arg {
-    pub fn clean(&self) -> Argument {
+    fn clean(&self) -> Argument {
         Argument {
             name: name_from_pat(self.pat),
             type_: (self.ty.clean()),
@@ -382,7 +382,7 @@ pub enum RetStyle {
 }
 
 impl Clean<RetStyle> for ast::ret_style {
-    pub fn clean(&self) -> RetStyle {
+    fn clean(&self) -> RetStyle {
         match *self {
             ast::return_val => Return,
             ast::noreturn => NoReturn
@@ -398,7 +398,7 @@ pub struct Trait {
 }
 
 impl Clean<Item> for doctree::Trait {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -415,7 +415,7 @@ impl Clean<Item> for doctree::Trait {
 }
 
 impl Clean<Type> for ast::trait_ref {
-    pub fn clean(&self) -> Type {
+    fn clean(&self) -> Type {
         let t = Unresolved(self.path.clean(), None, self.ref_id);
         resolve_type(&t)
     }
@@ -428,13 +428,13 @@ pub enum TraitMethod {
 }
 
 impl TraitMethod {
-    pub fn is_req(&self) -> bool {
+    fn is_req(&self) -> bool {
         match self {
             &Required(*) => true,
             _ => false,
         }
     }
-    pub fn is_def(&self) -> bool {
+    fn is_def(&self) -> bool {
         match self {
             &Provided(*) => true,
             _ => false,
@@ -443,7 +443,7 @@ impl TraitMethod {
 }
 
 impl Clean<TraitMethod> for ast::trait_method {
-    pub fn clean(&self) -> TraitMethod {
+    fn clean(&self) -> TraitMethod {
         match self {
             &ast::required(ref t) => Required(t.clean()),
             &ast::provided(ref t) => Provided(t.clean()),
@@ -492,7 +492,7 @@ pub enum Type {
 }
 
 impl Clean<Type> for ast::Ty {
-    pub fn clean(&self) -> Type {
+    fn clean(&self) -> Type {
         use syntax::ast::*;
         debug!("cleaning type `%?`", self);
         let codemap = local_data::get(super::ctxtkey, |x| *x.unwrap()).sess.codemap;
@@ -525,7 +525,7 @@ pub struct StructField {
 }
 
 impl Clean<Item> for ast::struct_field {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         let (name, vis) = match self.node.kind {
             ast::named_field(id, vis) => (Some(id), Some(vis)),
             _ => (None, None)
@@ -546,7 +546,7 @@ impl Clean<Item> for ast::struct_field {
 pub type Visibility = ast::visibility;
 
 impl Clean<Option<Visibility>> for ast::visibility {
-    pub fn clean(&self) -> Option<Visibility> {
+    fn clean(&self) -> Option<Visibility> {
         Some(*self)
     }
 }
@@ -559,7 +559,7 @@ pub struct Struct {
 }
 
 impl Clean<Item> for doctree::Struct {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -585,7 +585,7 @@ pub struct VariantStruct {
 }
 
 impl Clean<VariantStruct> for syntax::ast::struct_def {
-    pub fn clean(&self) -> VariantStruct {
+    fn clean(&self) -> VariantStruct {
         VariantStruct {
             struct_type: doctree::struct_type_from_def(self),
             fields: self.fields.clean(),
@@ -600,7 +600,7 @@ pub struct Enum {
 }
 
 impl Clean<Item> for doctree::Enum {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -621,7 +621,7 @@ pub struct Variant {
 }
 
 impl Clean<Item> for doctree::Variant {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -643,7 +643,7 @@ pub enum VariantKind {
 }
 
 impl Clean<VariantKind> for ast::variant_kind {
-    pub fn clean(&self) -> VariantKind {
+    fn clean(&self) -> VariantKind {
         match self {
             &ast::tuple_variant_kind(ref args) => {
                 if args.len() == 0 {
@@ -658,7 +658,7 @@ impl Clean<VariantKind> for ast::variant_kind {
 }
 
 impl Clean<~str> for syntax::codemap::span {
-    pub fn clean(&self) -> ~str {
+    fn clean(&self) -> ~str {
         let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap;
         cm.span_to_str(*self)
     }
@@ -672,7 +672,7 @@ pub struct Path {
 }
 
 impl Clean<Path> for ast::Path {
-    pub fn clean(&self) -> Path {
+    fn clean(&self) -> Path {
         Path {
             name: path_to_str(self),
             lifetime: self.rp.clean(),
@@ -681,7 +681,7 @@ impl Clean<Path> for ast::Path {
     }
 }
 
-pub fn path_to_str(p: &ast::Path) -> ~str {
+fn path_to_str(p: &ast::Path) -> ~str {
     use syntax::parse::token::interner_get;
 
     let mut s = ~"";
@@ -698,7 +698,7 @@ pub fn path_to_str(p: &ast::Path) -> ~str {
 }
 
 impl Clean<~str> for ast::ident {
-    pub fn clean(&self) -> ~str {
+    fn clean(&self) -> ~str {
         its(self).to_owned()
     }
 }
@@ -710,7 +710,7 @@ pub struct Typedef {
 }
 
 impl Clean<Item> for doctree::Typedef {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: Some(self.name.clean()),
             attrs: self.attrs.clean(),
@@ -734,7 +734,7 @@ pub struct BareFunctionDecl {
 }
 
 impl Clean<BareFunctionDecl> for ast::TyBareFn {
-    pub fn clean(&self) -> BareFunctionDecl {
+    fn clean(&self) -> BareFunctionDecl {
         BareFunctionDecl {
             purity: self.purity,
             generics: Generics {
@@ -758,7 +758,7 @@ pub struct Static {
 }
 
 impl Clean<Item> for doctree::Static {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         debug!("claning static %s: %?", self.name.clean(), self);
         Item {
             name: Some(self.name.clean()),
@@ -783,7 +783,7 @@ pub enum Mutability {
 }
 
 impl Clean<Mutability> for ast::mutability {
-    pub fn clean(&self) -> Mutability {
+    fn clean(&self) -> Mutability {
         match self {
             &ast::m_mutbl => Mutable,
             &ast::m_imm => Immutable,
@@ -801,7 +801,7 @@ pub struct Impl {
 }
 
 impl Clean<Item> for doctree::Impl {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: None,
             attrs: self.attrs.clean(),
@@ -824,7 +824,7 @@ pub struct ViewItem {
 }
 
 impl Clean<Item> for ast::view_item {
-    pub fn clean(&self) -> Item {
+    fn clean(&self) -> Item {
         Item {
             name: None,
             attrs: self.attrs.clean(),
@@ -845,7 +845,7 @@ pub enum ViewItemInner {
 }
 
 impl Clean<ViewItemInner> for ast::view_item_ {
-    pub fn clean(&self) -> ViewItemInner {
+    fn clean(&self) -> ViewItemInner {
         match self {
             &ast::view_item_extern_mod(ref i, ref p, ref mi, ref id) =>
                 ExternMod(i.clean(), p.map(|x| x.to_owned()),  mi.clean(), *id),
@@ -862,7 +862,7 @@ pub enum ViewPath {
 }
 
 impl Clean<ViewPath> for ast::view_path {
-    pub fn clean(&self) -> ViewPath {
+    fn clean(&self) -> ViewPath {
         match self.node {
             ast::view_path_simple(ref i, ref p, ref id) => SimpleImport(i.clean(), p.clean(), *id),
             ast::view_path_glob(ref p, ref id) => GlobImport(p.clean(), *id),
@@ -874,7 +874,7 @@ impl Clean<ViewPath> for ast::view_path {
 pub type ViewListIdent = ~str;
 
 impl Clean<ViewListIdent> for ast::path_list_ident {
-    pub fn clean(&self) -> ViewListIdent {
+    fn clean(&self) -> ViewListIdent {
         self.node.name.clean()
     }
 }
@@ -882,16 +882,19 @@ impl Clean<ViewListIdent> for ast::path_list_ident {
 // Utilities
 
 trait ToSource {
-    pub fn to_src(&self) -> ~str;
+    fn to_src(&self) -> ~str;
 }
 
 impl ToSource for syntax::codemap::span {
-    pub fn to_src(&self) -> ~str {
+    fn to_src(&self) -> ~str {
+        debug!("converting span %s to snippet", self.clean());
         let cm = local_data::get(super::ctxtkey, |x| x.unwrap().clone()).sess.codemap.clone();
-        match cm.span_to_snippet(*self) {
+        let sn = match cm.span_to_snippet(*self) {
             Some(x) => x,
             None    => ~""
-        }
+        };
+        debug!("got snippet %s", sn);
+        sn
     }
 }
 
@@ -942,7 +945,7 @@ fn remove_comment_tags(s: &str) -> ~str {
     }
 }
 
-/*pub fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
+/*fn collapse_docs(attrs: ~[Attribute]) -> ~[Attribute] {
     let mut docstr = ~"";
     for at in attrs.iter() {
         match *at {

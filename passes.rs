@@ -15,7 +15,7 @@ pub fn noop(crate: clean::Crate) -> plugins::PluginResult {
 pub fn strip_hidden(crate: clean::Crate) -> plugins::PluginResult {
     struct Stripper;
     impl fold::DocFolder for Stripper {
-        pub fn fold_item(&mut self, i: Item) -> Option<Item> {
+        fn fold_item(&mut self, i: Item) -> Option<Item> {
             for attr in i.attrs.iter() {
                 match attr {
                     &clean::List(~"doc", ref l) => {
@@ -43,7 +43,7 @@ pub fn strip_hidden(crate: clean::Crate) -> plugins::PluginResult {
 pub fn clean_comments(crate: clean::Crate) -> plugins::PluginResult {
     struct CommentCleaner;
     impl fold::DocFolder for CommentCleaner {
-        pub fn fold_item(&mut self, i: Item) -> Option<Item> {
+        fn fold_item(&mut self, i: Item) -> Option<Item> {
             let mut i = i;
             let mut avec: ~[clean::Attribute] = ~[];
             for attr in i.attrs.iter() {
@@ -67,7 +67,7 @@ pub fn collapse_privacy(crate: clean::Crate) -> plugins::PluginResult {
         stack: ~[clean::Visibility]
     }
     impl fold::DocFolder for PrivacyCollapser {
-        pub fn fold_item(&mut self, mut i: Item) -> Option<Item> {
+        fn fold_item(&mut self, mut i: Item) -> Option<Item> {
             if i.visibility.is_some() {
                 if i.visibility == Some(ast::inherited) {
                     i.visibility = Some(self.stack.last().clone());
@@ -86,7 +86,7 @@ pub fn collapse_privacy(crate: clean::Crate) -> plugins::PluginResult {
 pub fn collapse_docs(crate: clean::Crate) -> plugins::PluginResult {
     struct Collapser;
     impl fold::DocFolder for Collapser {
-        pub fn fold_item(&mut self, i: Item) -> Option<Item> {
+        fn fold_item(&mut self, i: Item) -> Option<Item> {
             let mut docstr = ~"";
             let mut i = i;
             for attr in i.attrs.iter() {

@@ -4,12 +4,12 @@ use clean::*;
 use std::iterator::Extendable;
 
 pub trait DocFolder {
-    pub fn fold_item(&mut self, item: Item) -> Option<Item> {
+    fn fold_item(&mut self, item: Item) -> Option<Item> {
         self.fold_item_recur(item)
     }
 
     /// don't override!
-    pub fn fold_item_recur(&mut self, item: Item) -> Option<Item> {
+    fn fold_item_recur(&mut self, item: Item) -> Option<Item> {
         use std::util::swap;
         let Item { attrs, name, source, visibility, id, inner } = item;
         let inner = inner;
@@ -77,11 +77,11 @@ pub trait DocFolder {
                     visibility: visibility, id: id })
     }
 
-    pub fn fold_mod(&mut self, m: Module) -> Module {
+    fn fold_mod(&mut self, m: Module) -> Module {
         Module { items: m.items.move_iter().filter_map(|i| self.fold_item(i)).collect() }
     }
 
-    pub fn fold_crate(&mut self, mut c: Crate) -> Crate {
+    fn fold_crate(&mut self, mut c: Crate) -> Crate {
         let mut mod_ = None;
         std::util::swap(&mut mod_, &mut c.module);
         let mod_ = mod_.unwrap();
